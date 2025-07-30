@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { QuestionEntity } from "./entity/question";
+import { QuestionEntity } from "./entity/question.entity";
 import { Repository } from 'typeorm';
 import { OpenAIService } from "src/openai/openai.service";
 import { ChunkService } from "src/chunks/chunk.service";

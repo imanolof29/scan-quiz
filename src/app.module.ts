@@ -6,6 +6,9 @@ import { OpenAIModule } from './openai/openai.module';
 import { CommonModule } from './common/common.module';
 import { DocumentsModule } from './documents/documents.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DocumentEntity } from './documents/entity/document.entity';
+import { QuestionEntity } from './questions/entity/question.entity';
+import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
 
 @Module({
   imports: [
@@ -22,7 +25,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        entities: [DocumentEntity, QuestionEntity, DocumentChunkEntity],
         synchronize: true,
       }),
       inject: [ConfigService],

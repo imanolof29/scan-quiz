@@ -1,5 +1,5 @@
 import { DocumentChunkEntity } from 'src/chunks/entity/document-chunk.entity';
-import { QuestionEntity } from 'src/questions/entity/question';
+import { QuestionEntity } from 'src/questions/entity/question.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 
 
@@ -14,7 +14,7 @@ export class DocumentEntity {
     @Column()
     filename: string
 
-    @Column()
+    @Column({ nullable: true })
     s3Key: string
 
     @Column()

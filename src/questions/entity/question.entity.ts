@@ -9,7 +9,7 @@ export class QuestionEntity {
     @Column()
     question: string
 
-    @Column()
+    @Column('text', { array: true })
     options: string[]
 
     @Column()
@@ -21,10 +21,10 @@ export class QuestionEntity {
     @Column()
     questionType: string
 
-    @Column()
+    @Column('text', { array: true })
     sourceChunkIds: string[]
 
-    @Column()
+    @Column('text', { array: true })
     pageReferences: string[]
 
     @ManyToOne(() => DocumentEntity, (document) => document.questions)

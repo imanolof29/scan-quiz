@@ -10,8 +10,8 @@ export class DocumentChunkEntity {
     @Column('text')
     content: string;
 
-    @Column('vector', { length: 1536 })
-    @Index({ spatial: true })
+    @Column('real', { array: true })
+    @Index()
     embedding: number[];
 
     @Column()

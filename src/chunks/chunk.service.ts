@@ -11,7 +11,6 @@ export class ChunkService {
         @InjectRepository(DocumentChunkEntity)
         private readonly chunkRepository: Repository<DocumentChunkEntity>,
         private readonly openaiService: OpenAIService,
-        private readonly chunksRepository: Repository<DocumentChunkEntity>,
     ) { }
 
     async findChunksByDocumentId(documentId: string): Promise<DocumentChunkEntity[]> {
@@ -25,7 +24,7 @@ export class ChunkService {
             try {
                 const embedding = await this.openaiService.generateEmbedding(chunk.content);
 
-                const documentChunk = this.chunksRepository.create({
+                const documentChunk = this.chunkRepository.create({
                     content: chunk.content,
                     embedding,
                     pageNumber: chunk.pageNumber,
@@ -40,7 +39,7 @@ export class ChunkService {
             }
         }
 
-        await this.chunksRepository.save(processedChunks);
+        await this.chunkRepository.save(processedChunks);
         return processedChunks;
     }
 
