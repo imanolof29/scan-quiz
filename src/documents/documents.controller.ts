@@ -4,7 +4,6 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 
 @Controller('documents')
-@UseGuards(JwtGuard)
 export class DocumentsController {
     constructor(private readonly documentsService: DocumentsService) { }
 
@@ -27,12 +26,11 @@ export class DocumentsController {
             throw new BadRequestException('File too large. Max size: 50MB');
         }
 
-        const userId = req.user.id;
         const shouldGenerateQuestions = generateQuestions === 'true';
 
         const document = await this.documentsService.uploadAndProcess(
             file,
-            userId,
+            "userId",
             shouldGenerateQuestions,
         );
 

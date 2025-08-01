@@ -11,7 +11,6 @@ export class DocumentChunkEntity {
     content: string;
 
     @Column('real', { array: true })
-    @Index()
     embedding: number[];
 
     @Column()

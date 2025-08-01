@@ -21,14 +21,16 @@ export class OpenAIService {
             messages: [
                 {
                     role: 'system',
-                    content: 'Generate quiz questions from the provided content...',
+                    content: 'Eres un asistente que genera preguntas de quiz en formato JSON estricto. SIEMPRE responde únicamente con JSON válido, sin texto adicional, sin formato markdown, sin explicaciones fuera del JSON.',
                 },
                 {
                     role: 'user',
-                    content,
+                    content: options.prompt,
                 },
             ],
-            temperature: 0.7,
+            temperature: options.temperature || 0.7,
+            max_tokens: options.maxTokens || 2000,
+            response_format: { type: "json_object" }
         });
         return response.choices[0].message.content;
     }

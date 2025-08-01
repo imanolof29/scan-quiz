@@ -43,12 +43,16 @@ export class QuestionsService {
                 }
             }
 
-            // Guardar preguntas en BD
             for (const questionData of questions) {
-                const question = this.questionsRepository.create({
+                const normalizedQuestionData = {
                     ...questionData,
+                    pageReferences: Array.isArray(questionData.pageReferences)
+                        ? questionData.pageReferences
+                        : [questionData.pageReferences],
                     document: { id: documentId },
-                });
+                };
+
+                const question = this.questionsRepository.create(normalizedQuestionData);
                 await this.questionsRepository.save(question);
             }
 
@@ -61,7 +65,7 @@ export class QuestionsService {
 
     private async generateQuestionsFromContent(content: string, chunks: any[]) {
         const prompt = `
-Basándote en el siguiente contenido, genera 3-4 preguntas de opción múltiple de calidad para estudiar:
+Basándote en el siguiente contenido, genera 3-4 preguntas de opción múltiple de calidad para estudiar.
 
 CONTENIDO:
 ${content}
@@ -74,13 +78,15 @@ INSTRUCCIONES:
 - Varía la dificultad (fácil, medio, difícil)
 - Enfócate en conceptos clave y relaciones importantes
 
-FORMATO DE RESPUESTA (JSON):
+IMPORTANTE: Responde ÚNICAMENTE con JSON válido, sin texto adicional, sin formato markdown.
+
+FORMATO DE RESPUESTA (JSON exacto):
 {
   "questions": [
     {
       "question": "¿Cuál es el concepto principal...?",
       "options": ["A) Opción 1", "B) Opción 2", "C) Opción 3", "D) Opción 4"],
-      "correctAnswer": "B",
+      "answerIndex": 1,
       "explanation": "La respuesta B es correcta porque...",
       "difficulty": "medium",
       "questionType": "multiple_choice"
@@ -95,8 +101,27 @@ FORMATO DE RESPUESTA (JSON):
             temperature: 0.7,
         });
 
-        // Parsear respuesta JSON
-        const parsedResponse = JSON.parse(response ?? "");
+        // Limpiar y parsear respuesta JSON
+        let parsedResponse;
+        try {
+            // Verificar que la respuesta no sea null o undefined
+            if (!response) {
+                throw new Error('Respuesta vacía o nula de OpenAI');
+            }
+
+            // Limpiar posibles caracteres de markdown o texto adicional
+            const cleanedResponse = this.cleanJsonResponse(response);
+            parsedResponse = JSON.parse(cleanedResponse);
+
+            // Validar estructura de respuesta
+            if (!parsedResponse.questions || !Array.isArray(parsedResponse.questions)) {
+                throw new Error('Respuesta no tiene el formato esperado: debe contener un array de questions');
+            }
+        } catch (parseError) {
+            console.error('Error parsing OpenAI response:', parseError);
+            console.error('Raw response:', response);
+            throw new Error(`Error parseando respuesta de OpenAI: ${parseError.message}`);
+        }
 
         // Agregar metadatos
         return parsedResponse.questions.map(q => ({
@@ -104,6 +129,31 @@ FORMATO DE RESPUESTA (JSON):
             sourceChunkIds: chunks.map(c => c.id),
             pageReferences: this.generatePageReferences(chunks),
         }));
+    }
+
+    private cleanJsonResponse(response: string): string {
+        if (!response) {
+            throw new Error('Respuesta vacía de OpenAI');
+        }
+
+        // Eliminar posibles bloques de código markdown
+        let cleaned = response.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+
+        // Eliminar líneas que comiencen con # (markdown headers)
+        cleaned = cleaned.replace(/^#+.*$/gm, '');
+
+        // Eliminar líneas vacías al principio y final
+        cleaned = cleaned.trim();
+
+        // Buscar el primer { y el último } para extraer solo el JSON
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+
+        if (firstBrace === -1 || lastBrace === -1) {
+            throw new Error('No se encontró JSON válido en la respuesta');
+        }
+
+        return cleaned.substring(firstBrace, lastBrace + 1);
     }
 
     private generatePageReferences(chunks: any[]): string {

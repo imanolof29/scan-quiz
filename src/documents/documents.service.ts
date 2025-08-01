@@ -40,12 +40,12 @@ export class DocumentsService {
             status: 'processing',
         });
 
-        const savedDocument = await this.documentsRepository.save(document);
+        await this.documentsRepository.save(document);
 
         // 3. Procesar asíncronamente (no bloquear la respuesta)
-        this.processDocumentAsync(savedDocument[0], file, generateQuestions);
+        this.processDocumentAsync(document, file, generateQuestions);
 
-        return savedDocument;
+        return document;
     }
 
     private async processDocumentAsync(
