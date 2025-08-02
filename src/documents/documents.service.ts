@@ -7,6 +7,7 @@ import { ChunkService } from "src/chunks/chunk.service";
 import { FileUploadService } from "src/common/services/file-upload.service";
 import { PdfProcessorService } from "src/common/services/pdf-processor.service";
 import { TextChunkerService } from "src/common/services/text-chunker.service";
+import { DocumentDto } from "./dto/document.dto";
 
 @Injectable()
 export class DocumentsService {
@@ -20,6 +21,22 @@ export class DocumentsService {
         private pdfProcessorService: PdfProcessorService,
         private textChunkerService: TextChunkerService,
     ) { }
+
+    async getDocuments(): Promise<DocumentDto[]> {
+        const documents = await this.documentsRepository.find({
+            select: ['id', 'title', 'filename', 'status', 'createdAt', 'questions'],
+            order: { createdAt: 'DESC' },
+        });
+
+        return documents.map(doc => ({
+            id: doc.id,
+            title: doc.title,
+            filename: doc.filename,
+            status: doc.status,
+            createdAt: doc.createdAt,
+            questions: 0,
+        }));
+    }
 
     async uploadAndProcess(
         file: Express.Multer.File,
@@ -105,34 +122,39 @@ export class DocumentsService {
     }
 
     async getDocumentQuestions(documentId: string, userId: string) {
-        const document = await this.documentsRepository.findOne({
-            where: { id: documentId },
-            relations: ['questions'],
-        });
+        try {
+            const document = await this.documentsRepository.findOne({
+                where: { id: documentId },
+                relations: ['questions'],
+            });
 
-        if (!document) {
+            if (!document) {
+                throw new NotFoundException('Document not found');
+            }
+
+            // if (document.status !== 'completed') {
+            //     throw new BadRequestException('Document is still processing');
+            // }
+
+            return {
+                documentId: document.id,
+                title: document.title,
+                questions: document.questions.map(q => ({
+                    id: q.id,
+                    question: q.question,
+                    options: q.options,
+                    correctAnswer: q.answerIndex,
+                    difficulty: q.difficulty,
+                    questionType: q.questionType,
+                    pageReferences: q.pageReferences,
+                })),
+                totalQuestions: document.questions.length,
+                estimatedTime: Math.ceil(document.questions.length * 1.5),
+            };
+        } catch (error) {
+            console.error('Error fetching document questions:', error);
             throw new NotFoundException('Document not found');
         }
-
-        if (document.status !== 'completed') {
-            throw new BadRequestException('Document is still processing');
-        }
-
-        return {
-            documentId: document.id,
-            title: document.title,
-            questions: document.questions.map(q => ({
-                id: q.id,
-                question: q.question,
-                options: q.options,
-                correctAnswer: q.answerIndex,
-                difficulty: q.difficulty,
-                questionType: q.questionType,
-                pageReferences: q.pageReferences,
-            })),
-            totalQuestions: document.questions.length,
-            estimatedTime: Math.ceil(document.questions.length * 1.5), // 1.5 min por pregunta
-        };
     }
 
     async getDocumentStatus(documentId: string, userId: string) {

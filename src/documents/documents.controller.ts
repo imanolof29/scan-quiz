@@ -7,6 +7,11 @@ import { JwtGuard } from "src/auth/guard/jwt.guard";
 export class DocumentsController {
     constructor(private readonly documentsService: DocumentsService) { }
 
+    @Get('find')
+    async getDocuments() {
+        return await this.documentsService.getDocuments();
+    }
+
     @Post('upload')
     @UseInterceptors(FileInterceptor('file'))
     async uploadDocument(
@@ -50,7 +55,6 @@ export class DocumentsController {
 
     @Get(':id/questions')
     async getDocumentQuestions(@Param('id') id: string, @Request() req) {
-        const userId = req.user.id;
-        return await this.documentsService.getDocumentQuestions(id, userId);
+        return await this.documentsService.getDocumentQuestions(id, "");
     }
 }
