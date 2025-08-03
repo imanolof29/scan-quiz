@@ -4,15 +4,14 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { Auth } from "src/auth/decorator/auth.decorator";
 
 @Controller('documents')
+@Auth()
 export class DocumentsController {
     constructor(private readonly documentsService: DocumentsService) { }
 
     @Get('find')
-    @Auth()
     async getDocuments(
         @Request() req
     ) {
-        console.log("USER ID in DocumentsController: ", req.user.id);
         return await this.documentsService.getDocuments();
     }
 
