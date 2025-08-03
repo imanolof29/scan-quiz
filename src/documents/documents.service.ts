@@ -22,9 +22,10 @@ export class DocumentsService {
         private textChunkerService: TextChunkerService,
     ) { }
 
-    async getDocuments(): Promise<DocumentDto[]> {
+    async getDocuments(userId: string): Promise<DocumentDto[]> {
         const documents = await this.documentsRepository.find({
             select: ['id', 'title', 'filename', 'status', 'createdAt', 'questions'],
+            where: { userId },
             order: { createdAt: 'DESC' },
         });
 
@@ -41,7 +42,6 @@ export class DocumentsService {
     async uploadAndProcess(
         file: Express.Multer.File,
         userId: string,
-        generateQuestions: boolean = true,
     ) {
         // const estimatedCredits = this.estimateCredits(file.size);
         // const hasCredits = await this.creditsService.hasEnoughCredits(userId, estimatedCredits);
@@ -61,7 +61,7 @@ export class DocumentsService {
         await this.documentsRepository.save(document);
 
         // 3. Procesar asíncronamente (no bloquear la respuesta)
-        this.processDocumentAsync(document, file, generateQuestions);
+        this.processDocumentAsync(document, file);
 
         return document;
     }
@@ -69,7 +69,6 @@ export class DocumentsService {
     private async processDocumentAsync(
         document: DocumentEntity,
         file: Express.Multer.File,
-        generateQuestions: boolean,
     ) {
         try {
             // 1. Subir archivo a S3
@@ -95,9 +94,7 @@ export class DocumentsService {
             await this.chunksService.processChunks(document.id, chunks);
 
             // 5. Generar preguntas si se solicita
-            if (generateQuestions) {
-                await this.questionsService.generateQuestionsForDocument(document.id);
-            }
+            await this.questionsService.generateQuestionsForDocument(document.id);
 
             // 6. Calcular y deducir créditos reales
             // const realCredits = await this.calculateRealCredits(document.id);
