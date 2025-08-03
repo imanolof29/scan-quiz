@@ -1,7 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Request, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { DocumentsService } from "./documents.service";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { Auth } from "src/auth/decorator/auth.decorator";
 
 @Controller('documents')

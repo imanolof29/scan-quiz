@@ -1,22 +1,44 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
-import { AuthUser } from "@supabase/supabase-js";
-import { ExtractJwt, Strategy } from 'passport-jwt'
+import { Strategy } from 'passport-custom';
+import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
-export class SupabaseStrategy extends PassportStrategy(Strategy) {
+export class SupabaseStrategy extends PassportStrategy(Strategy, 'supabase') {
+    private readonly logger = new Logger(SupabaseStrategy.name);
+    private supabase;
 
     constructor(private readonly configService: ConfigService) {
-        super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ignoreExpiration: false,
-            secretOrKey: configService.get<string>('SUPABASE_JWT_SECRET'),
-        });
+        super();
+
+        this.supabase = createClient(
+            configService.getOrThrow<string>('SUPABASE_URL'),
+            configService.getOrThrow<string>('SUPABASE_ANON_KEY')
+        );
     }
 
-    async validate(user: AuthUser) {
-        console.log("USER PAYLOAD ", user);
-        return user;
+    async validate(req: any): Promise<any> {
+        const token = req.headers.authorization?.replace('Bearer ', '');
+
+        if (!token) {
+            this.logger.error('No token provided');
+            return null;
+        }
+
+        try {
+            const { data: { user }, error } = await this.supabase.auth.getUser(token);
+
+            if (error || !user) {
+                this.logger.error('Invalid token:', error);
+                return null;
+            }
+
+            this.logger.log('User authenticated:', { id: user.id, email: user.email });
+            return user;
+        } catch (error) {
+            this.logger.error('Authentication error:', error);
+            return null;
+        }
     }
 }
