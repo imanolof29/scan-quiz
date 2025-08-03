@@ -8,6 +8,9 @@ export class DocumentEntity {
     @PrimaryGeneratedColumn('uuid')
     id: string
 
+    @Column({ nullable: false })
+    userId: string
+
     @Column()
     title: string
 

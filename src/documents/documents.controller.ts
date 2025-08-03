@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Request, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, Request, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { DocumentsService } from "./documents.service";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Auth } from "src/auth/decorator/auth.decorator";
+import { CurrentUser } from "src/auth/decorator/user.decorator";
 
 @Controller('documents')
 @Auth()
@@ -10,7 +11,7 @@ export class DocumentsController {
 
     @Get('find')
     async getDocuments(
-        @Request() req
+        @CurrentUser('id') userId: string,
     ) {
         return await this.documentsService.getDocuments();
     }
@@ -57,7 +58,10 @@ export class DocumentsController {
     }
 
     @Get(':id/questions')
-    async getDocumentQuestions(@Param('id') id: string, @Request() req) {
-        return await this.documentsService.getDocumentQuestions(id, "");
+    async getDocumentQuestions(
+        @Param('id') id: string,
+        @CurrentUser('id') userId: string
+    ) {
+        return await this.documentsService.getDocumentQuestions(id, userId);
     }
 }

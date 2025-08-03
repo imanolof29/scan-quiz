@@ -55,6 +55,7 @@ export class DocumentsService {
             title: file.originalname.replace('.pdf', ''),
             filename: file.originalname,
             status: 'processing',
+            userId
         });
 
         await this.documentsRepository.save(document);
@@ -124,7 +125,7 @@ export class DocumentsService {
     async getDocumentQuestions(documentId: string, userId: string) {
         try {
             const document = await this.documentsRepository.findOne({
-                where: { id: documentId },
+                where: { id: documentId, userId },
                 relations: ['questions'],
             });
 
@@ -159,7 +160,7 @@ export class DocumentsService {
 
     async getDocumentStatus(documentId: string, userId: string) {
         const document = await this.documentsRepository.findOne({
-            where: { id: documentId },
+            where: { id: documentId, userId },
             select: ['id', 'title', 'status', 'createdAt'],
         });
 
@@ -174,10 +175,9 @@ export class DocumentsService {
         return Math.ceil(fileSize / (100 * 1024));
     }
 
-    private async calculateRealCredits(documentId: string): Promise<number> {
-        // Cálculo real basado en tokens usados
+    private async calculateRealCredits(documentId: string, userId: string): Promise<number> {
         const document = await this.documentsRepository.findOne({
-            where: { id: documentId },
+            where: { id: documentId, userId },
             relations: ['chunks', 'questions'],
         });
 
@@ -188,7 +188,6 @@ export class DocumentsService {
         const tokensUsed = document.chunks.reduce((total, chunk) => total + chunk.tokenCount, 0);
         const questionsGenerated = document.questions.length;
 
-        // 1 crédito por cada 1000 tokens + 0.1 crédito por pregunta
         return Math.ceil(tokensUsed / 1000) + Math.ceil(questionsGenerated * 0.1);
     }
 }
