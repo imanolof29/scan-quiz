@@ -16,6 +16,7 @@ export class SupabaseStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(user: AuthUser) {
+        console.log("USER PAYLOAD ", user);
         return user;
     }
 }

@@ -2,13 +2,18 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Request, Uploa
 import { DocumentsService } from "./documents.service";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
+import { Auth } from "src/auth/decorator/auth.decorator";
 
 @Controller('documents')
 export class DocumentsController {
     constructor(private readonly documentsService: DocumentsService) { }
 
     @Get('find')
-    async getDocuments() {
+    @Auth()
+    async getDocuments(
+        @Request() req
+    ) {
+        console.log("USER ID in DocumentsController: ", req.user.id);
         return await this.documentsService.getDocuments();
     }
 
