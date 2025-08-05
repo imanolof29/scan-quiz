@@ -8,6 +8,7 @@ import { InjectQueue } from "@nestjs/bullmq";
 import { JOB_TYPES, QUEUE_NAMES } from "src/queue/queue.constants";
 import { Queue } from "bullmq";
 import { ProcessDocumentJobData } from "src/queue/types/job-data";
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class DocumentsService {
@@ -40,28 +41,28 @@ export class DocumentsService {
         file: Express.Multer.File,
         userId: string,
     ) {
-        // 1. Crear documento en BD
+
+        const jobId = uuidv4();
+
         const document = this.documentsRepository.create({
             title: file.originalname.replace('.pdf', ''),
             filename: file.originalname,
             status: 'uploading',
-            userId
+            userId,
+            jobId
         });
 
         await this.documentsRepository.save(document);
 
         try {
-            // 2. Subir archivo a S3
             const s3Key = `documents/${document.id}.pdf`;
             await this.fileUploadService.uploadToS3(file.buffer, s3Key);
 
-            // 3. Actualizar con S3 key
             await this.documentsRepository.update(document.id, {
                 s3Key,
                 status: 'processing'
             });
 
-            // 4. Agregar trabajo a la cola principal
             const jobData: ProcessDocumentJobData = {
                 documentId: document.id,
                 userId,
@@ -74,7 +75,7 @@ export class DocumentsService {
                 jobData,
                 {
                     priority: 10,
-                    delay: 1000, // Pequeño delay para dar tiempo a la respuesta
+                    delay: 1000,
                     attempts: 3,
                     backoff: {
                         type: 'exponential',
@@ -83,7 +84,6 @@ export class DocumentsService {
                 }
             );
 
-            // 5. Actualizar documento con job ID para tracking
             await this.documentsRepository.update(document.id, {
                 jobId: job.id?.toString()
             });
@@ -91,7 +91,6 @@ export class DocumentsService {
             return document;
 
         } catch (error) {
-            // Marcar como fallido si hay error en upload
             await this.documentsRepository.update(document.id, {
                 status: 'failed'
             });
@@ -110,9 +109,9 @@ export class DocumentsService {
                 throw new NotFoundException('Document not found');
             }
 
-            if (document.status === 'processing') {
-                throw new BadRequestException('Document is still processing');
-            }
+            // if (document.status === 'processing') {
+            //     throw new BadRequestException('Document is still processing');
+            // }
 
             if (document.status === 'failed') {
                 throw new BadRequestException('Document processing failed');
@@ -149,7 +148,6 @@ export class DocumentsService {
             throw new NotFoundException('Document not found');
         }
 
-        // Si tiene jobId, intentar obtener información del job
         let jobInfo;
         if (document.jobId) {
             try {
@@ -163,7 +161,8 @@ export class DocumentsService {
                     };
                 }
             } catch (error) {
-                // Job no encontrado o error, no pasa nada
+                console.error(`Error fetching job info for document ${documentId}:`, error);
+                jobInfo = null;
             }
         }
 
@@ -190,7 +189,6 @@ export class DocumentsService {
             throw new BadRequestException('Document file not found');
         }
 
-        // Reiniciar procesamiento
         await this.documentsRepository.update(documentId, {
             status: 'processing',
         });
@@ -231,7 +229,6 @@ export class DocumentsService {
             throw new BadRequestException('Only processing documents can be cancelled');
         }
 
-        // Intentar cancelar el job
         if (document.jobId) {
             try {
                 const job = await this.documentProcessingQueue.getJob(document.jobId);
@@ -239,11 +236,9 @@ export class DocumentsService {
                     await job.remove();
                 }
             } catch (error) {
-                // Job ya procesado o no existe
             }
         }
 
-        // Marcar como cancelado
         await this.documentsRepository.update(documentId, {
             status: 'cancelled',
         });
