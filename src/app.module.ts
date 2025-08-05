@@ -9,6 +9,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DocumentEntity } from './documents/entity/document.entity';
 import { QuestionEntity } from './questions/entity/question.entity';
 import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [
@@ -27,6 +28,16 @@ import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
         database: configService.get<string>('DB_NAME'),
         entities: [DocumentEntity, QuestionEntity, DocumentChunkEntity],
         synchronize: true,
+      }),
+      inject: [ConfigService],
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('BULLMQ_HOST'),
+          port: configService.get<number>('BULLMQ_PORT'),
+        },
       }),
       inject: [ConfigService],
     }),

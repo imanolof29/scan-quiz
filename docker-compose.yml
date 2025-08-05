@@ -24,5 +24,28 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:7-alpine
+    container_name: scanquiz_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  bull-board:
+    image: deadly0/bull-board
+    container_name: scanquiz_bull_board
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
 volumes:
   postgres_data:
+  redis_data:
