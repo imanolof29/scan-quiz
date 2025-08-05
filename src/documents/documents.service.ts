@@ -2,24 +2,21 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { InjectRepository } from "@nestjs/typeorm";
 import { DocumentEntity } from "./entity/document.entity";
 import { Repository } from 'typeorm';
-import { QuestionsService } from "src/questions/question.service";
-import { ChunkService } from "src/chunks/chunk.service";
 import { FileUploadService } from "src/common/services/file-upload.service";
-import { PdfProcessorService } from "src/common/services/pdf-processor.service";
-import { TextChunkerService } from "src/common/services/text-chunker.service";
 import { DocumentDto } from "./dto/document.dto";
+import { InjectQueue } from "@nestjs/bullmq";
+import { JOB_TYPES, QUEUE_NAMES } from "src/queue/queue.constants";
+import { Queue } from "bullmq";
+import { ProcessDocumentJobData } from "src/queue/types/job-data";
 
 @Injectable()
 export class DocumentsService {
     constructor(
         @InjectRepository(DocumentEntity)
         private documentsRepository: Repository<DocumentEntity>,
-        private chunksService: ChunkService,
-        private questionsService: QuestionsService,
-        //private creditsService: CreditsService,
         private fileUploadService: FileUploadService,
-        private pdfProcessorService: PdfProcessorService,
-        private textChunkerService: TextChunkerService,
+        @InjectQueue(QUEUE_NAMES.DOCUMENT_PROCESSING)
+        private documentProcessingQueue: Queue,
     ) { }
 
     async getDocuments(userId: string): Promise<DocumentDto[]> {
@@ -35,7 +32,7 @@ export class DocumentsService {
             filename: doc.filename,
             status: doc.status,
             createdAt: doc.createdAt,
-            questions: 0,
+            questions: doc.questions?.length || 0,
         }));
     }
 
@@ -43,79 +40,62 @@ export class DocumentsService {
         file: Express.Multer.File,
         userId: string,
     ) {
-        // const estimatedCredits = this.estimateCredits(file.size);
-        // const hasCredits = await this.creditsService.hasEnoughCredits(userId, estimatedCredits);
-
-        // if (!hasCredits) {
-        //     throw new ForbiddenException('Insufficient credits');
-        // }
-
-        // 2. Crear documento en BD
+        // 1. Crear documento en BD
         const document = this.documentsRepository.create({
             title: file.originalname.replace('.pdf', ''),
             filename: file.originalname,
-            status: 'processing',
+            status: 'uploading',
             userId
         });
 
         await this.documentsRepository.save(document);
 
-        // 3. Procesar asíncronamente (no bloquear la respuesta)
-        this.processDocumentAsync(document, file);
-
-        return document;
-    }
-
-    private async processDocumentAsync(
-        document: DocumentEntity,
-        file: Express.Multer.File,
-    ) {
         try {
-            // 1. Subir archivo a S3
+            // 2. Subir archivo a S3
             const s3Key = `documents/${document.id}.pdf`;
             await this.fileUploadService.uploadToS3(file.buffer, s3Key);
 
-            await this.documentsRepository.update(document.id, { s3Key });
-
-            // 2. Extraer texto del PDF
-            const extractedData = await this.pdfProcessorService.extractText(file.buffer);
-
-            // await this.documentsRepository.update(document.id, {
-            //     totalPages: extractedData.totalPages
-            // });
-
-            // 3. Dividir en chunks
-            const chunks = await this.textChunkerService.createChunks(
-                extractedData.text,
-                extractedData.pageMapping,
-            );
-
-            // 4. Generar embeddings y guardar chunks
-            await this.chunksService.processChunks(document.id, chunks);
-
-            // 5. Generar preguntas si se solicita
-            await this.questionsService.generateQuestionsForDocument(document.id);
-
-            // 6. Calcular y deducir créditos reales
-            // const realCredits = await this.calculateRealCredits(document.id);
-            // await this.creditsService.deductCredits(
-            //     document.user.id,
-            //     realCredits,
-            //     `Document processing: ${document.title}`,
-            //     document.id,
-            // );
-
-            // 7. Marcar como completado
+            // 3. Actualizar con S3 key
             await this.documentsRepository.update(document.id, {
-                status: 'completed',
-                // creditsUsed: realCredits,
+                s3Key,
+                status: 'processing'
             });
 
+            // 4. Agregar trabajo a la cola principal
+            const jobData: ProcessDocumentJobData = {
+                documentId: document.id,
+                userId,
+                fileName: file.originalname,
+                s3Key,
+            };
+
+            const job = await this.documentProcessingQueue.add(
+                JOB_TYPES.PROCESS_DOCUMENT,
+                jobData,
+                {
+                    priority: 10,
+                    delay: 1000, // Pequeño delay para dar tiempo a la respuesta
+                    attempts: 3,
+                    backoff: {
+                        type: 'exponential',
+                        delay: 5000,
+                    },
+                }
+            );
+
+            // 5. Actualizar documento con job ID para tracking
+            await this.documentsRepository.update(document.id, {
+                jobId: job.id?.toString()
+            });
+
+            return document;
+
         } catch (error) {
-            console.error('Error processing document:', error);
+            // Marcar como fallido si hay error en upload
             await this.documentsRepository.update(document.id, {
                 status: 'failed'
             });
+            throw error;
         }
     }
 
@@ -130,9 +110,13 @@ export class DocumentsService {
                 throw new NotFoundException('Document not found');
             }
 
-            // if (document.status !== 'completed') {
-            //     throw new BadRequestException('Document is still processing');
-            // }
+            if (document.status === 'processing') {
+                throw new BadRequestException('Document is still processing');
+            }
+
+            if (document.status === 'failed') {
+                throw new BadRequestException('Document processing failed');
+            }
 
             return {
                 documentId: document.id,
@@ -151,40 +135,127 @@ export class DocumentsService {
             };
         } catch (error) {
             console.error('Error fetching document questions:', error);
-            throw new NotFoundException('Document not found');
+            throw error;
         }
     }
 
     async getDocumentStatus(documentId: string, userId: string) {
         const document = await this.documentsRepository.findOne({
             where: { id: documentId, userId },
-            select: ['id', 'title', 'status', 'createdAt'],
+            select: ['id', 'title', 'status', 'createdAt', 'jobId'],
         });
 
         if (!document) {
             throw new NotFoundException('Document not found');
         }
 
-        return document;
+        // Si tiene jobId, intentar obtener información del job
+        let jobInfo;
+        if (document.jobId) {
+            try {
+                const job = await this.documentProcessingQueue.getJob(document.jobId);
+                if (job) {
+                    jobInfo = {
+                        progress: job.progress(),
+                        processedOn: job.processedOn,
+                        finishedOn: job.finishedOn,
+                        failedReason: job.failedReason,
+                    };
+                }
+            } catch (error) {
+                // Job no encontrado o error, no pasa nada
+            }
+        }
+
+        return {
+            ...document,
+            jobInfo,
+        };
     }
 
-    private estimateCredits(fileSize: number): number {
-        return Math.ceil(fileSize / (100 * 1024));
-    }
-
-    private async calculateRealCredits(documentId: string, userId: string): Promise<number> {
+    async retryFailedDocument(documentId: string, userId: string) {
         const document = await this.documentsRepository.findOne({
             where: { id: documentId, userId },
-            relations: ['chunks', 'questions'],
         });
 
         if (!document) {
             throw new NotFoundException('Document not found');
         }
 
-        const tokensUsed = document.chunks.reduce((total, chunk) => total + chunk.tokenCount, 0);
-        const questionsGenerated = document.questions.length;
+        if (document.status !== 'failed') {
+            throw new BadRequestException('Only failed documents can be retried');
+        }
 
-        return Math.ceil(tokensUsed / 1000) + Math.ceil(questionsGenerated * 0.1);
+        if (!document.s3Key) {
+            throw new BadRequestException('Document file not found');
+        }
+
+        // Reiniciar procesamiento
+        await this.documentsRepository.update(documentId, {
+            status: 'processing',
+        });
+
+        const jobData: ProcessDocumentJobData = {
+            documentId: document.id,
+            userId,
+            fileName: document.filename,
+            s3Key: document.s3Key,
+        };
+
+        const job = await this.documentProcessingQueue.add(
+            JOB_TYPES.PROCESS_DOCUMENT,
+            jobData,
+            {
+                priority: 15,
+                attempts: 2,
+            }
+        );
+
+        await this.documentsRepository.update(documentId, {
+            jobId: job.id?.toString(),
+        });
+
+        return { success: true, jobId: job.id };
+    }
+
+    async cancelDocumentProcessing(documentId: string, userId: string) {
+        const document = await this.documentsRepository.findOne({
+            where: { id: documentId, userId },
+        });
+
+        if (!document) {
+            throw new NotFoundException('Document not found');
+        }
+
+        if (document.status !== 'processing') {
+            throw new BadRequestException('Only processing documents can be cancelled');
+        }
+
+        // Intentar cancelar el job
+        if (document.jobId) {
+            try {
+                const job = await this.documentProcessingQueue.getJob(document.jobId);
+                if (job) {
+                    await job.remove();
+                }
+            } catch (error) {
+                // Job ya procesado o no existe
+            }
+        }
+
+        // Marcar como cancelado
+        await this.documentsRepository.update(documentId, {
+            status: 'cancelled',
+        });
+
+        return { success: true };
+    }
+
+    async getQueueStats() {
+        const stats = {
+            documentProcessing: await this.documentProcessingQueue.getJobCounts(),
+        };
+
+        return stats;
     }
 }

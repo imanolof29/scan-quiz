@@ -8,11 +8,12 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { DocumentEntity } from "./entity/document.entity";
 import { ChunkModule } from "src/chunks/chunk.module";
 import { QuestionModule } from "src/questions/question.module";
+import { QueueModule } from "src/queue/queue.module";
 
 @Module({
     providers: [DocumentsService],
     controllers: [DocumentsController],
-    imports: [AuthModule, CommonModule, OpenAIModule, ChunkModule, QuestionModule, TypeOrmModule.forFeature([DocumentEntity])],
+    imports: [AuthModule, CommonModule, OpenAIModule, ChunkModule, QuestionModule, TypeOrmModule.forFeature([DocumentEntity]), QueueModule],
     exports: [DocumentsService],
 })
 export class DocumentsModule { }

@@ -21,6 +21,9 @@ export class DocumentEntity {
     s3Key: string
 
     @Column()
+    jobId: string
+
+    @Column()
     status: string
 
     @CreateDateColumn()
