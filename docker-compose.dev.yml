@@ -1,32 +1,32 @@
 version: '3.8'
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-    volumes:
-      - ./src:/app/src
-      - ./package.json:/app/package.json
-      - /app/node_modules
-    command: npm run start:dev
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NODE_ENV=development
+  #   volumes:
+  #     - ./src:/app/src
+  #     - ./package.json:/app/package.json
+  #     - /app/node_modules
+  #   command: npm run start:dev
 
-  db:
-    image: postgres:latest
-    container_name: scanquiz_db
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=scanquiz
-      - POSTGRES_PASSWORD=scanquiz
-      - POSTGRES_DB=scanquiz
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+  # db:
+  #   image: postgres:latest
+  #   container_name: scanquiz_db
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_USER=scanquiz
+  #     - POSTGRES_PASSWORD=scanquiz
+  #     - POSTGRES_DB=scanquiz
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
 
   redis:
     image: redis:7-alpine
@@ -51,5 +51,5 @@ services:
       - redis
 
 volumes:
-  postgres_data:
+  # postgres_data:
   redis_data:

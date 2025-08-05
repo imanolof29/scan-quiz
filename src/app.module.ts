@@ -10,6 +10,7 @@ import { DocumentEntity } from './documents/entity/document.entity';
 import { QuestionEntity } from './questions/entity/question.entity';
 import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
 import { BullModule } from '@nestjs/bullmq';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
@@ -31,16 +32,7 @@ import { BullModule } from '@nestjs/bullmq';
       }),
       inject: [ConfigService],
     }),
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get<string>('BULLMQ_HOST'),
-          port: configService.get<number>('BULLMQ_PORT'),
-        },
-      }),
-      inject: [ConfigService],
-    }),
+    QueueModule,
     OpenAIModule,
     QuestionModule,
     CommonModule,
