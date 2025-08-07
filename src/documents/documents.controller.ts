@@ -57,7 +57,7 @@ export class DocumentsController {
 
         return {
             success: true,
-            documentId: document.id,
+            documentId: document.documentId,
             status: document.status,
             message: 'Document uploaded. Processing started.',
         };

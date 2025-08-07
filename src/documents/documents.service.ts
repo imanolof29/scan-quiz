@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DocumentEntity } from "./entity/document.entity";
 import { Repository } from 'typeorm';
@@ -11,6 +11,8 @@ import { DocumentDto } from "./dto/document.dto";
 
 @Injectable()
 export class DocumentsService {
+    private readonly logger = new Logger(DocumentsService.name);
+
     constructor(
         @InjectRepository(DocumentEntity)
         private documentsRepository: Repository<DocumentEntity>,
@@ -23,26 +25,39 @@ export class DocumentsService {
     ) { }
 
     async getDocuments(userId: string): Promise<DocumentDto[]> {
-        const documents = await this.documentsRepository.find({
-            select: ['id', 'title', 'filename', 'status', 'createdAt', 'questions'],
-            where: { userId },
-            order: { createdAt: 'DESC' },
-        });
+        try {
+            const documents = await this.documentsRepository.find({
+                select: ['id', 'title', 'filename', 'status', 'createdAt'],
+                where: { userId },
+                order: { createdAt: 'DESC' },
+            });
 
-        return documents.map(doc => ({
-            id: doc.id,
-            title: doc.title,
-            filename: doc.filename,
-            status: doc.status,
-            createdAt: doc.createdAt,
-            questions: 0,
-        }));
+            return documents.map(doc => ({
+                id: doc.id,
+                title: doc.title,
+                filename: doc.filename,
+                status: doc.status,
+                createdAt: doc.createdAt,
+                questions: 0,
+            }));
+        } catch (error) {
+            this.logger.error('Error fetching documents:', error);
+            throw error;
+        }
     }
 
     async uploadAndProcess(
         file: Express.Multer.File,
         userId: string,
     ) {
+        if (!file) {
+            throw new BadRequestException('No file provided');
+        }
+
+        if (!userId) {
+            throw new BadRequestException('User ID is required');
+        }
+
         // const estimatedCredits = this.estimateCredits(file.size);
         // const hasCredits = await this.creditsService.hasEnoughCredits(userId, estimatedCredits);
 
@@ -50,76 +65,165 @@ export class DocumentsService {
         //     throw new ForbiddenException('Insufficient credits');
         // }
 
-        // 2. Crear documento en BD
-        const document = this.documentsRepository.create({
-            title: file.originalname.replace('.pdf', ''),
-            filename: file.originalname,
-            status: 'processing',
-            userId
-        });
+        try {
+            // 1. Crear documento en BD
+            const document = this.documentsRepository.create({
+                title: file.originalname.replace('.pdf', ''),
+                filename: file.originalname,
+                status: 'uploading', // Estado inicial más específico
+                userId
+            });
 
-        await this.documentsRepository.save(document);
+            const savedDocument = await this.documentsRepository.save(document);
 
-        // 3. Procesar asíncronamente (no bloquear la respuesta)
-        this.processDocumentAsync(document, file);
+            if (!savedDocument?.id) {
+                throw new Error('Failed to save document to database');
+            }
 
-        return document;
+            this.logger.log(`Document created with ID: ${savedDocument.id}`);
+
+            // 2. Procesar asíncronamente (sin bloquear la respuesta)
+            // Ejecutar en background sin await
+            setImmediate(() => {
+                this.processDocumentAsync(savedDocument.id, file);
+            });
+
+            return {
+                success: true,
+                documentId: savedDocument.id,
+                status: savedDocument.status,
+                message: 'Document uploaded successfully, processing started'
+            };
+
+        } catch (error) {
+            this.logger.error('Error in uploadAndProcess:', error);
+            throw error;
+        }
     }
 
     private async processDocumentAsync(
-        document: DocumentEntity,
+        documentId: string,
         file: Express.Multer.File,
     ) {
+        let currentStatus = 'processing';
+
         try {
-            // 1. Subir archivo a S3
-            const s3Key = `documents/${document.id}.pdf`;
+            this.logger.log(`Starting async processing for document ${documentId}`);
+
+            // Verificar que el documento existe
+            let document = await this.documentsRepository.findOne({
+                where: { id: documentId }
+            });
+
+            if (!document) {
+                this.logger.error(`Document with ID ${documentId} not found`);
+                return;
+            }
+
+            // 1. Actualizar estado a procesando
+            currentStatus = 'processing';
+            await this.updateDocumentStatus(documentId, currentStatus);
+
+            // 2. Subir archivo a S3
+            this.logger.log(`Uploading file to S3 for document ${documentId}`);
+            const s3Key = `documents/${documentId}.pdf`;
             await this.fileUploadService.uploadToS3(file.buffer, s3Key);
 
-            await this.documentsRepository.update(document.id, { s3Key });
+            await this.documentsRepository.update(documentId, { s3Key });
+            this.logger.log(`File uploaded to S3 with key: ${s3Key}`);
 
-            // 2. Extraer texto del PDF
+            // 3. Extraer texto del PDF
+            currentStatus = 'extracting';
+            await this.updateDocumentStatus(documentId, currentStatus);
+            this.logger.log(`Extracting text from PDF for document ${documentId}`);
+
             const extractedData = await this.pdfProcessorService.extractText(file.buffer);
 
-            // await this.documentsRepository.update(document.id, {
-            //     totalPages: extractedData.totalPages
-            // });
+            if (!extractedData?.text) {
+                throw new Error('Failed to extract text from PDF');
+            }
 
-            // 3. Dividir en chunks
+            this.logger.log(`Text extracted successfully, length: ${extractedData.text.length}`);
+
+            // 4. Dividir en chunks
+            currentStatus = 'chunking';
+            await this.updateDocumentStatus(documentId, currentStatus);
+            this.logger.log(`Creating chunks for document ${documentId}`);
+
             const chunks = await this.textChunkerService.createChunks(
                 extractedData.text,
-                extractedData.pageMapping,
+                extractedData.pageMapping || [],
             );
 
-            // 4. Generar embeddings y guardar chunks
-            await this.chunksService.processChunks(document.id, chunks);
+            if (!chunks || chunks.length === 0) {
+                throw new Error('Failed to create chunks from document');
+            }
 
-            // 5. Generar preguntas si se solicita
-            await this.questionsService.generateQuestionsForDocument(document.id);
+            this.logger.log(`Created ${chunks.length} chunks for document ${documentId}`);
 
-            // 6. Calcular y deducir créditos reales
-            // const realCredits = await this.calculateRealCredits(document.id);
+            // 5. Generar embeddings y guardar chunks
+            await this.chunksService.processChunks(documentId, chunks);
+            this.logger.log(`Chunks processed and saved for document ${documentId}`);
+
+            // 6. Generar preguntas
+            currentStatus = 'generating_questions';
+            await this.updateDocumentStatus(documentId, currentStatus);
+            this.logger.log(`Generating questions for document ${documentId}`);
+
+            await this.questionsService.generateQuestionsForDocument(documentId);
+
+            // 7. Calcular y deducir créditos reales (comentado por ahora)
+            // const realCredits = await this.calculateRealCredits(documentId);
             // await this.creditsService.deductCredits(
-            //     document.user.id,
+            //     document.userId,
             //     realCredits,
             //     `Document processing: ${document.title}`,
-            //     document.id,
+            //     documentId,
             // );
 
-            // 7. Marcar como completado
-            await this.documentsRepository.update(document.id, {
-                status: 'completed',
-                // creditsUsed: realCredits,
-            });
+            // 8. Marcar como completado
+            currentStatus = 'completed';
+            await this.updateDocumentStatus(documentId, currentStatus);
+
+            this.logger.log(`Document ${documentId} processing completed successfully`);
 
         } catch (error) {
-            console.error('Error processing document:', error);
-            await this.documentsRepository.update(document.id, {
-                status: 'failed'
-            });
+            this.logger.error(`Error processing document ${documentId}:`, error);
+
+            // Marcar como fallido con mensaje de error específico
+            await this.updateDocumentStatus(documentId, 'failed', error.message);
+        }
+    }
+
+    private async updateDocumentStatus(
+        documentId: string,
+        status: string,
+        errorMessage?: string
+    ): Promise<void> {
+        try {
+            const updateData: any = { status };
+
+            if (errorMessage && status === 'failed') {
+                updateData.errorMessage = errorMessage;
+            }
+
+            const result = await this.documentsRepository.update(documentId, updateData);
+
+            if (result.affected === 0) {
+                this.logger.warn(`No document found with ID ${documentId} to update status`);
+            } else {
+                this.logger.log(`Document ${documentId} status updated to: ${status}`);
+            }
+        } catch (error) {
+            this.logger.error(`Failed to update document status for ${documentId}:`, error);
         }
     }
 
     async getDocumentQuestions(documentId: string, userId: string) {
+        if (!documentId || !userId) {
+            throw new BadRequestException('Document ID and User ID are required');
+        }
+
         try {
             const document = await this.documentsRepository.findOne({
                 where: { id: documentId, userId },
@@ -127,12 +231,25 @@ export class DocumentsService {
             });
 
             if (!document) {
-                throw new NotFoundException('Document not found');
+                throw new NotFoundException(`Document with ID ${documentId} not found`);
             }
 
-            // if (document.status !== 'completed') {
-            //     throw new BadRequestException('Document is still processing');
-            // }
+            // Verificar si el documento está procesado
+            if (document.status !== 'completed') {
+                throw new BadRequestException(`Document is still processing. Current status: ${document.status}`);
+            }
+
+            // Verificar si tiene preguntas
+            if (!document.questions || document.questions.length === 0) {
+                this.logger.warn(`Document ${documentId} has no questions`);
+                return {
+                    documentId: document.id,
+                    title: document.title,
+                    questions: [],
+                    totalQuestions: 0,
+                    estimatedTime: 0,
+                };
+            }
 
             return {
                 documentId: document.id,
@@ -144,47 +261,83 @@ export class DocumentsService {
                     correctAnswer: q.answerIndex,
                     difficulty: q.difficulty,
                     questionType: q.questionType,
-                    pageReferences: q.pageReferences,
+                    pageReferences: q.pageReferences || [],
                 })),
                 totalQuestions: document.questions.length,
                 estimatedTime: Math.ceil(document.questions.length * 1.5),
             };
         } catch (error) {
-            console.error('Error fetching document questions:', error);
-            throw new NotFoundException('Document not found');
+            this.logger.error(`Error fetching document questions for ${documentId}:`, error);
+
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error;
+            }
+
+            throw new NotFoundException(`Document with ID ${documentId} not found`);
         }
     }
 
     async getDocumentStatus(documentId: string, userId: string) {
-        const document = await this.documentsRepository.findOne({
-            where: { id: documentId, userId },
-            select: ['id', 'title', 'status', 'createdAt'],
-        });
-
-        if (!document) {
-            throw new NotFoundException('Document not found');
+        if (!documentId || !userId) {
+            throw new BadRequestException('Document ID and User ID are required');
         }
 
-        return document;
+        try {
+            const document = await this.documentsRepository.findOne({
+                where: { id: documentId, userId },
+                select: ['id', 'title', 'status', 'createdAt'],
+            });
+
+            if (!document) {
+                throw new NotFoundException(`Document with ID ${documentId} not found`);
+            }
+
+            // Asegurar que siempre retornamos un objeto válido
+            return {
+                id: document.id,
+                title: document.title || 'Unknown',
+                status: document.status || 'unknown',
+                createdAt: document.createdAt || new Date().toISOString(),
+            };
+
+        } catch (error) {
+            this.logger.error(`Error fetching document status for ${documentId}:`, error);
+
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error;
+            }
+
+            throw new NotFoundException(`Document with ID ${documentId} not found`);
+        }
     }
 
     private estimateCredits(fileSize: number): number {
         return Math.ceil(fileSize / (100 * 1024));
     }
 
-    private async calculateRealCredits(documentId: string, userId: string): Promise<number> {
-        const document = await this.documentsRepository.findOne({
-            where: { id: documentId, userId },
-            relations: ['chunks', 'questions'],
-        });
+    private async calculateRealCredits(documentId: string): Promise<number> {
+        try {
+            const document = await this.documentsRepository.findOne({
+                where: { id: documentId },
+                relations: ['chunks', 'questions'],
+            });
 
-        if (!document) {
-            throw new NotFoundException('Document not found');
+            if (!document) {
+                this.logger.error(`Document ${documentId} not found for credit calculation`);
+                return 0;
+            }
+
+            const tokensUsed = document.chunks?.reduce((total, chunk) => total + (chunk.tokenCount || 0), 0) || 0;
+            const questionsGenerated = document.questions?.length || 0;
+
+            const totalCredits = Math.ceil(tokensUsed / 1000) + Math.ceil(questionsGenerated * 0.1);
+
+            this.logger.log(`Credits calculated for document ${documentId}: ${totalCredits}`);
+
+            return totalCredits;
+        } catch (error) {
+            this.logger.error(`Error calculating credits for document ${documentId}:`, error);
+            return 0;
         }
-
-        const tokensUsed = document.chunks.reduce((total, chunk) => total + chunk.tokenCount, 0);
-        const questionsGenerated = document.questions.length;
-
-        return Math.ceil(tokensUsed / 1000) + Math.ceil(questionsGenerated * 0.1);
     }
 }
