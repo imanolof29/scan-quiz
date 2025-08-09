@@ -4,5 +4,5 @@ export class DocumentDto {
     filename: string;
     status: string;
     createdAt: Date;
-    questions: number
+    questionsCount: number;
 }

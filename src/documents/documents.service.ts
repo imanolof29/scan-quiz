@@ -26,11 +26,20 @@ export class DocumentsService {
 
     async getDocuments(userId: string): Promise<DocumentDto[]> {
         try {
-            const documents = await this.documentsRepository.find({
-                select: ['id', 'title', 'filename', 'status', 'createdAt'],
-                where: { userId },
-                order: { createdAt: 'DESC' },
-            });
+            // const documents = await this.documentsRepository.find({
+            //     select: ['id', 'title', 'filename', 'status', 'createdAt'],
+            //     where: { userId },
+            //     order: { createdAt: 'DESC' },
+            // });
+
+            const documents = await this.documentsRepository
+                .createQueryBuilder('document')
+                .select(['document.id', 'document.title', 'document.filename', 'document.status', 'document.createdAt'])
+                .where('document.userId = :userId', { userId })
+                .loadRelationCountAndMap('document.questionsCount', 'document.questions')
+                .orderBy('document.createdAt', 'DESC')
+                .getMany();
+
 
             return documents.map(doc => ({
                 id: doc.id,
@@ -38,7 +47,7 @@ export class DocumentsService {
                 filename: doc.filename,
                 status: doc.status,
                 createdAt: doc.createdAt,
-                questions: 0,
+                questionsCount: doc['questionsCount'] || 0,
             }));
         } catch (error) {
             this.logger.error('Error fetching documents:', error);
