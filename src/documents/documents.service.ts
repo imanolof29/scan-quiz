@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DocumentEntity } from "./entity/document.entity";
+import { DocumentEntity, DocumentStatus } from "./entity/document.entity";
 import { Repository } from 'typeorm';
 import { QuestionsService } from "src/questions/question.service";
 import { ChunkService } from "src/chunks/chunk.service";
@@ -79,7 +79,7 @@ export class DocumentsService {
             const document = this.documentsRepository.create({
                 title: file.originalname.replace('.pdf', ''),
                 filename: file.originalname,
-                status: 'uploading', // Estado inicial más específico
+                status: DocumentStatus.UPLOADING,
                 userId
             });
 
@@ -301,11 +301,10 @@ export class DocumentsService {
                 throw new NotFoundException(`Document with ID ${documentId} not found`);
             }
 
-            // Asegurar que siempre retornamos un objeto válido
             return {
                 id: document.id,
-                title: document.title || 'Unknown',
-                status: document.status || 'unknown',
+                title: document.title,
+                status: document.status,
                 createdAt: document.createdAt || new Date().toISOString(),
             };
 
