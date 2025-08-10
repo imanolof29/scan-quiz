@@ -9,6 +9,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DocumentEntity } from './documents/entity/document.entity';
 import { QuestionEntity } from './questions/entity/question.entity';
 import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
     QuestionModule,
     CommonModule,
     DocumentsModule,
+    HealthModule
   ],
   controllers: [],
   providers: [],
