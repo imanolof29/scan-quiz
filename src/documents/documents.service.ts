@@ -8,6 +8,7 @@ import { FileUploadService } from "src/common/services/file-upload.service";
 import { PdfProcessorService } from "src/common/services/pdf-processor.service";
 import { TextChunkerService } from "src/common/services/text-chunker.service";
 import { DocumentDto } from "./dto/document.dto";
+import { ProcessingService } from "src/processing/processing.service";
 
 @Injectable()
 export class DocumentsService {
@@ -22,6 +23,7 @@ export class DocumentsService {
         private fileUploadService: FileUploadService,
         private pdfProcessorService: PdfProcessorService,
         private textChunkerService: TextChunkerService,
+        private readonly processingService: ProcessingService,
     ) { }
 
     async getDocuments(userId: string): Promise<DocumentDto[]> {
@@ -67,13 +69,6 @@ export class DocumentsService {
             throw new BadRequestException('User ID is required');
         }
 
-        // const estimatedCredits = this.estimateCredits(file.size);
-        // const hasCredits = await this.creditsService.hasEnoughCredits(userId, estimatedCredits);
-
-        // if (!hasCredits) {
-        //     throw new ForbiddenException('Insufficient credits');
-        // }
-
         try {
             // 1. Crear documento en BD
             const document = this.documentsRepository.create({
@@ -91,17 +86,14 @@ export class DocumentsService {
 
             this.logger.log(`Document created with ID: ${savedDocument.id}`);
 
-            // 2. Procesar asíncronamente (sin bloquear la respuesta)
-            // Ejecutar en background sin await
-            setImmediate(() => {
-                this.processDocumentAsync(savedDocument.id, file);
-            });
+            // 2. Añadir a la cola de procesamiento
+            await this.processingService.addDocumentToQueue(savedDocument.id, file);
 
             return {
                 success: true,
                 documentId: savedDocument.id,
                 status: savedDocument.status,
-                message: 'Document uploaded successfully, processing started'
+                message: 'Document uploaded successfully, processing added to queue'
             };
 
         } catch (error) {

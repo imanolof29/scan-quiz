@@ -10,6 +10,7 @@ import { DocumentEntity } from './documents/entity/document.entity';
 import { QuestionEntity } from './questions/entity/question.entity';
 import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
 import { HealthModule } from './health/health.module';
+import { ProcessingModule } from './processing/processing.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { HealthModule } from './health/health.module';
     QuestionModule,
     CommonModule,
     DocumentsModule,
-    HealthModule
+    HealthModule,
+    ProcessingModule
   ],
   controllers: [],
   providers: [],
