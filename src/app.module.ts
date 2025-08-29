@@ -11,6 +11,9 @@ import { QuestionEntity } from './questions/entity/question.entity';
 import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
 import { HealthModule } from './health/health.module';
 import { ProcessingModule } from './processing/processing.module';
+import { ChatModule } from './chat/chat.module';
+import { MessageEntity } from './chat/entity/message.entity';
+import { ConversationEntity } from './chat/entity/conversation.entity';
 
 @Module({
   imports: [
@@ -27,7 +30,7 @@ import { ProcessingModule } from './processing/processing.module';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [DocumentEntity, QuestionEntity, DocumentChunkEntity],
+        entities: [DocumentEntity, QuestionEntity, DocumentChunkEntity, MessageEntity, ConversationEntity],
         synchronize: true,
       }),
       inject: [ConfigService],
@@ -37,7 +40,8 @@ import { ProcessingModule } from './processing/processing.module';
     CommonModule,
     DocumentsModule,
     HealthModule,
-    ProcessingModule
+    ProcessingModule,
+    ChatModule
   ],
   controllers: [],
   providers: [],
