@@ -30,14 +30,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     async handleConnection(client: Socket) {
         try {
             // Extraer token del handshake
-            const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
+            // const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
 
-            if (!token) {
-                client.disconnect();
-                return;
-            }
+            // if (!token) {
+            //     client.disconnect();
+            //     return;
+            // }
 
-            const userId = ""
+            //HARDCODED USER ID
+            const userId = "0fd2a360-c746-4e6b-bd5b-2ea04f63a4ee"
 
             client.data.userId = userId;
             this.userSockets.set(userId, client);
@@ -67,14 +68,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         try {
             const conversation = await this.chatService.getConversationById(
-                data.conversationId,
+                data.documentId,
                 userId
             );
 
-            client.join(data.conversationId);
+            client.join(data.documentId);
 
             client.emit('joined_conversation', {
-                conversationId: data.conversationId,
+                documentId: data.documentId,
                 conversation
             });
 
@@ -93,25 +94,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     ) {
         const userId = client.data.userId;
 
+        console.log("DATA ", data)
+
         try {
             // Emitir que se recibió el mensaje
-            this.server.to(data.conversationId).emit('message_received', {
+            this.server.to(data.documentId).emit('message_received', {
                 content: data.content,
                 role: 'user',
                 timestamp: new Date()
             });
 
             // Indicar que se está buscando información
-            this.server.to(data.conversationId).emit('status_update', {
+            this.server.to(data.documentId).emit('status_update', {
                 status: 'searching',
                 message: 'Buscando información relevante...'
             });
 
             // Buscar información relevante
             const conversation = await this.chatService.getConversationMeta(
-                data.conversationId,
+                data.documentId,
                 userId
             );
+
+            console.log("CONVERSATION ", conversation)
 
             const searchResults = await this.chunkService.searchSimilarChunks(
                 data.content,
@@ -120,14 +125,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 0.7
             );
 
+            console.log("SEARCH RESULTS ", searchResults)
+
             // Guardar mensaje del usuario
             await this.chatService.saveUserMessage(
-                data.conversationId,
+                data.documentId,
                 data.content
             );
 
             // Indicar que se está generando respuesta
-            this.server.to(data.conversationId).emit('status_update', {
+            this.server.to(data.documentId).emit('status_update', {
                 status: 'generating',
                 message: 'Generando respuesta...',
                 sources: searchResults.map(r => ({
@@ -138,7 +145,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
             // Generar respuesta con streaming
             await this.streamAIResponse(
-                data.conversationId,
+                data.documentId,
                 data.content,
                 searchResults,
                 conversation,
@@ -148,12 +155,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         } catch (error) {
             console.error('Error procesando mensaje:', error);
 
-            this.server.to(data.conversationId).emit('error', {
+            this.server.to(data.documentId).emit('error', {
                 message: 'Error procesando el mensaje',
                 error: error.message
             });
 
-            this.server.to(data.conversationId).emit('status_update', {
+            this.server.to(data.documentId).emit('status_update', {
                 status: 'error',
                 message: 'Error procesando el mensaje'
             });
@@ -182,7 +189,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         };
 
         let fullResponse = '';
-        const messageId = await this.chatService.createAssistantMessage(conversationId);
+        const messageId = await this.chatService.createAssistantMessage(conversation.id);
 
         try {
             // Stream de OpenAI

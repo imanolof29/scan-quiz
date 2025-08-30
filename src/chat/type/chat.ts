@@ -1,8 +1,8 @@
 export type ChatMessage = {
-    conversationId: string;
+    documentId: string;
     content: string;
 }
 
 export type JoinConversation = {
-    conversationId: string;
+    documentId: string;
 }

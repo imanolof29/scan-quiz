@@ -78,6 +78,8 @@ export class ChunkService {
             }
         }
 
+        console.log("RESULTS ", results)
+
         return results
             .sort((a, b) => b.similarity - a.similarity)
             .slice(0, limit);

@@ -48,17 +48,21 @@ export class ChatService {
         return savedConversation;
     }
 
-    async getConversationById(conversationId: string, userId: string): Promise<ConversationEntity> {
+    async getConversationById(documentId: string, userId: string): Promise<ConversationEntity> {
         const conversation = await this.conversationRepository.findOne({
             where: {
-                id: conversationId,
+                documentId,
                 userId
             },
             relations: ['messages', 'document']
         });
 
         if (!conversation) {
-            throw new NotFoundException(`Conversación no encontrada: ${conversationId}`);
+            const conversation = await this.conversationRepository.create({
+                userId,
+                documentId
+            })
+            return await this.conversationRepository.save(conversation);
         }
 
         return conversation;
@@ -88,12 +92,16 @@ export class ChatService {
     // Método requerido por el ChatGateway
     async getConversationMeta(conversationId: string, userId: string): Promise<any> {
         const conversation = await this.conversationRepository.findOne({
-            where: { id: conversationId, userId },
+            where: { documentId: conversationId, userId },
             relations: ['document']
         });
 
         if (!conversation) {
-            throw new NotFoundException('Conversación no encontrada');
+            const conversation = await this.conversationRepository.create({
+                userId,
+                documentId: conversationId
+            })
+            return await this.conversationRepository.save(conversation);
         }
 
         return conversation;
@@ -103,7 +111,7 @@ export class ChatService {
     async saveUserMessage(conversationId: string, content: string): Promise<MessageEntity> {
         // Verificar que la conversación existe
         const conversation = await this.conversationRepository.findOne({
-            where: { id: conversationId }
+            where: { documentId: conversationId }
         });
 
         if (!conversation) {
@@ -111,7 +119,7 @@ export class ChatService {
         }
 
         const userMessage = this.messageRepository.create({
-            conversationId,
+            conversationId: conversation.id,
             role: MessageRole.USER,
             content,
         });
@@ -120,9 +128,18 @@ export class ChatService {
     }
 
     // Obtener mensajes recientes para contexto
-    async getRecentMessages(conversationId: string, limit: number = 10): Promise<any[]> {
+    async getRecentMessages(documentId: string, limit: number = 10): Promise<any[]> {
+        // Primero encontrar la conversación por documentId
+        const conversation = await this.conversationRepository.findOne({
+            where: { documentId }
+        });
+
+        if (!conversation) {
+            return [];
+        }
+
         const messages = await this.messageRepository.find({
-            where: { conversationId },
+            where: { conversationId: conversation.id }, // CORREGIDO: Usar conversation.id
             order: { createdAt: 'DESC' },
             take: limit
         });
