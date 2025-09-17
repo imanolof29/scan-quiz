@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { REQUEST } from "@nestjs/core";
-import { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ExtractJwt } from 'passport-jwt';
 
 @Injectable()
@@ -10,7 +10,7 @@ export class Supabase {
     private clientInstance: SupabaseClient
 
     constructor(
-        @Inject(REQUEST) private readonly request: Request,
+        //@Inject(REQUEST) private readonly request: Request,
         private readonly configService: ConfigService
     ) { }
 
@@ -21,13 +21,13 @@ export class Supabase {
             return this.clientInstance;
         }
         this.logger.log('Creating new Supabase client instance');
-        this.clientInstance = new SupabaseClient(
+        this.clientInstance = createClient(
             this.configService.getOrThrow<string>('SUPABASE_URL'),
             this.configService.getOrThrow<string>('SUPABASE_SERVICE_ROLE_KEY'),
         )
-        this.clientInstance.auth.setSession(
-            ExtractJwt.fromAuthHeaderAsBearerToken()(this.request),
-        );
+        // this.clientInstance.auth.setSession(
+        //     ExtractJwt.fromAuthHeaderAsBearerToken()(this.request),
+        // );
         return this.clientInstance;
     }
 

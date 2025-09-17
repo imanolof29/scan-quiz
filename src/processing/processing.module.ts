@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ProcessingService } from './processing.service';
 import { ProcessingConsumer } from './processing.consumer';
@@ -9,6 +9,7 @@ import { OpenAIModule } from 'src/openai/openai.module';
 import { ChunkModule } from 'src/chunks/chunk.module';
 import { QuestionModule } from 'src/questions/question.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { DocumentsModule } from 'src/documents/documents.module';
 
 @Module({
   imports: [
@@ -39,8 +40,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     OpenAIModule,
     ChunkModule,
     QuestionModule,
+    forwardRef(() => DocumentsModule),
   ],
   providers: [ProcessingService, ProcessingConsumer],
-  exports: [ProcessingService],
+  exports: [ProcessingService, ProcessingConsumer],
 })
-export class ProcessingModule {}
+export class ProcessingModule { }
