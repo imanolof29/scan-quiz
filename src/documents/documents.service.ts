@@ -29,7 +29,6 @@ export class DocumentsService {
                     'document.filename',
                     'document.status',
                     'document.createdAt',
-                    'document.updatedAt'
                 ])
                 .where('document.userId = :userId', { userId })
                 .loadRelationCountAndMap('document.questionsCount', 'document.questions')

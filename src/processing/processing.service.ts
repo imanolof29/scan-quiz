@@ -14,7 +14,7 @@ export class ProcessingService {
   async addDocumentToQueue(
     documentId: string,
     file: Express.Multer.File,
-    userId?: string, // Añadir userId opcional
+    userId?: string,
   ): Promise<void> {
     this.logger.log(`Adding document ${documentId} to processing queue`);
 
@@ -25,7 +25,7 @@ export class ProcessingService {
         fileBuffer: file.buffer.toString('base64'),
         fileName: file.originalname,
         mimeType: file.mimetype,
-        userId, // Incluir userId en los datos del job
+        userId,
       },
       {
         priority: 1,
@@ -34,8 +34,6 @@ export class ProcessingService {
           type: 'exponential',
           delay: 3000,
         },
-        // Añadir delay si necesitas procesar documentos con cierto retraso
-        // delay: 1000,
       },
     );
 
@@ -133,7 +131,6 @@ export class ProcessingService {
     this.logger.log(`Queue cleaned - removed jobs older than ${grace}ms`);
   }
 
-  // Método para obtener jobs por documento ID
   async getJobsByDocumentId(documentId: string): Promise<any[]> {
     try {
       const jobs = await this.documentQueue.getJobs(['waiting', 'active', 'completed', 'failed']);

@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { Supabase } from 'src/common/services/supabase';
+import { Step } from 'src/processing/types/step';
 
 interface AuthenticatedSocket extends Socket {
     userId?: string;
@@ -108,16 +109,9 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
         this.logger.log(`User ${client.userId} left room ${roomName}`);
     }
 
-    // Métodos para enviar notificaciones desde el procesador
-    async notifyDocumentStatusUpdate(
-        documentId: string,
-        userId: string,
-        status: string,
-        progress?: number,
-        message?: string,
-    ) {
-        const roomName = `document-${documentId}`;
-
+    async notifyDocumentStatusUpdate(step: Step) {
+        const roomName = `document-${step.documentId}`;
+        const { documentId, userId, status, progress, message } = step;
         const notification = {
             documentId,
             status,
@@ -156,7 +150,6 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
             timestamp: new Date().toISOString(),
         };
 
-        // Enviar notificación de completado
         const roomName = `document-${documentId}`;
         this.server.to(roomName).emit('document-completed', notification);
 
@@ -193,12 +186,10 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
         this.logger.error(`Failure notification sent for document ${documentId}: ${error}`);
     }
 
-    // Método para obtener usuarios conectados (para debugging)
     getConnectedUsers(): string[] {
         return Array.from(this.userSockets.keys());
     }
 
-    // Método para verificar si un usuario está conectado
     isUserConnected(userId: string): boolean {
         return this.userSockets.has(userId);
     }

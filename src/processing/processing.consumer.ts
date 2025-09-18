@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, NotFoundException } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,6 +10,7 @@ import { TextChunkerService } from 'src/common/services/text-chunker.service';
 import { ChunkService } from 'src/chunks/chunk.service';
 import { QuestionsService } from 'src/questions/question.service';
 import { DocumentProcessingGateway } from 'src/documents/documents.gateway';
+import { Step } from './types/step';
 
 
 @Processor('document-processing', {
@@ -36,7 +37,7 @@ export class ProcessingConsumer extends WorkerHost {
   }
 
   async process(job: Job<any>): Promise<any> {
-    const { documentId, fileBuffer, fileName, userId } = job.data;
+    const { documentId, fileBuffer, userId } = job.data;
     let currentStatus = DocumentStatus.PROCESSING;
     const buffer = Buffer.from(fileBuffer, 'base64');
     const startTime = Date.now();
@@ -44,38 +45,50 @@ export class ProcessingConsumer extends WorkerHost {
     try {
       this.logger.log(`Processing document ${documentId} | Attempt: ${job.attemptsMade + 1}`);
 
-      // Verificar que el documento existe y obtener userId si no se proporcionó
       const document = await this.documentsRepository.findOne({
         where: { id: documentId }
       });
 
       if (!document) {
-        throw new Error(`Document with ID ${documentId} not found`);
+        throw new NotFoundException(`Document with ID ${documentId} not found`);
       }
 
-      const documentUserId = userId || document.userId;
-
-      // Actualizar estado a procesando
       await this.updateDocumentStatus(documentId, currentStatus);
-      await this.notifyStatusUpdate(documentId, documentUserId, currentStatus, 5, 'Starting document processing...');
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: currentStatus,
+        progress: 5,
+        message: 'Starting document processing...'
+      });
 
-      // Progreso: 10% - Subir archivo a S3
       await job.updateProgress(10);
       this.logger.log(`Uploading file to S3 for document ${documentId}`);
 
-      await this.notifyStatusUpdate(documentId, documentUserId, 'uploading', 10, 'Uploading file to cloud storage...');
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: DocumentStatus.UPLOADING,
+        progress: 10,
+        message: 'Uploading file to cloud storage...'
+      });
 
       const s3Key = `documents/${documentId}.pdf`;
       await this.fileUploadService.uploadToS3(buffer, s3Key);
       await this.documentsRepository.update(documentId, { s3Key });
 
-      // Progreso: 20% - Extraer texto del PDF
       await job.updateProgress(20);
       currentStatus = DocumentStatus.EXTRACTING;
       await this.updateDocumentStatus(documentId, currentStatus);
 
       this.logger.log(`Extracting text from PDF for document ${documentId}`);
-      await this.notifyStatusUpdate(documentId, documentUserId, currentStatus, 20, 'Extracting text from PDF...');
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: currentStatus,
+        progress: 20,
+        message: 'Extracting text from PDF...'
+      });
 
       const extractedData = await this.pdfProcessorService.extractText(buffer);
       if (!extractedData?.text) {
@@ -84,13 +97,18 @@ export class ProcessingConsumer extends WorkerHost {
 
       this.logger.log(`Text extracted successfully, length: ${extractedData.text.length}`);
 
-      // Progreso: 40% - Dividir en chunks
       await job.updateProgress(40);
       currentStatus = DocumentStatus.CHUNKING;
       await this.updateDocumentStatus(documentId, currentStatus);
 
       this.logger.log(`Creating chunks for document ${documentId}`);
-      await this.notifyStatusUpdate(documentId, documentUserId, currentStatus, 40, 'Dividing document into sections...');
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: currentStatus,
+        progress: 40,
+        message: 'Dividing document into sections...'
+      });
 
       const chunks = await this.textChunkerService.createChunks(
         extractedData.text,
@@ -105,7 +123,13 @@ export class ProcessingConsumer extends WorkerHost {
 
       // Progreso: 60% - Generar embeddings y guardar chunks
       await job.updateProgress(60);
-      await this.notifyStatusUpdate(documentId, documentUserId, currentStatus, 60, `Processing ${chunks.length} document sections...`);
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: currentStatus,
+        progress: 60,
+        message: `Processing ${chunks.length} document sections...`
+      });
 
       await this.chunksService.processChunks(documentId, chunks);
 
@@ -115,17 +139,28 @@ export class ProcessingConsumer extends WorkerHost {
       await this.updateDocumentStatus(documentId, currentStatus);
 
       this.logger.log(`Generating questions for document ${documentId}`);
-      await this.notifyStatusUpdate(documentId, documentUserId, currentStatus, 80, 'Generating practice questions...');
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: currentStatus,
+        progress: 80,
+        message: 'Generating practice questions...'
+      });
 
       const questions = await this.questionsService.generateQuestionsForDocument(documentId);
       const questionsCount = questions?.length || 0;
 
-      // Progreso: 95% - Finalizando
       await job.updateProgress(95);
-      await this.notifyStatusUpdate(documentId, documentUserId, 'finalizing', 95, 'Finalizing processing...');
-
-      // Marcar como completado
       currentStatus = DocumentStatus.COMPLETED;
+      await this.notifyStatusUpdate({
+        documentId,
+        userId: document.userId,
+        status: currentStatus,
+        progress: 95,
+        message: 'Finalizing processing...'
+      });
+
+
       await this.updateDocumentStatus(documentId, currentStatus);
 
       // Progreso: 100%
@@ -138,7 +173,7 @@ export class ProcessingConsumer extends WorkerHost {
       // Notificar completion con datos adicionales
       await this.documentProcessingGateway.notifyDocumentCompleted(
         documentId,
-        documentUserId,
+        document.userId,
         {
           questionsCount,
           processingTime,
@@ -209,24 +244,11 @@ export class ProcessingConsumer extends WorkerHost {
     }
   }
 
-  private async notifyStatusUpdate(
-    documentId: string,
-    userId: string,
-    status: string,
-    progress: number,
-    message: string,
-  ): Promise<void> {
+  private async notifyStatusUpdate(step: Step): Promise<void> {
     try {
-      await this.documentProcessingGateway.notifyDocumentStatusUpdate(
-        documentId,
-        userId,
-        status,
-        progress,
-        message
-      );
+      await this.documentProcessingGateway.notifyDocumentStatusUpdate(step);
     } catch (error) {
-      this.logger.error(`Failed to send WebSocket notification for document ${documentId}:`, error);
-      // No lanzamos el error para no interrumpir el procesamiento
+      this.logger.error(`Failed to send WebSocket notification for document ${step.documentId}:`, error);
     }
   }
 }
