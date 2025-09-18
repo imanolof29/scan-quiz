@@ -11,6 +11,8 @@ import { ChunkService } from 'src/chunks/chunk.service';
 import { QuestionsService } from 'src/questions/question.service';
 import { DocumentProcessingGateway } from 'src/documents/documents.gateway';
 import { Step } from './types/step';
+import { DocumentProcessingJobData } from './types/processing-job';
+import { ProcessingResult } from './types/processing-result';
 
 
 @Processor('document-processing', {
@@ -36,7 +38,7 @@ export class ProcessingConsumer extends WorkerHost {
     super();
   }
 
-  async process(job: Job<any>): Promise<any> {
+  async process(job: Job<DocumentProcessingJobData>): Promise<ProcessingResult> {
     const { documentId, fileBuffer, userId } = job.data;
     let currentStatus = DocumentStatus.PROCESSING;
     const buffer = Buffer.from(fileBuffer, 'base64');
@@ -121,7 +123,6 @@ export class ProcessingConsumer extends WorkerHost {
 
       this.logger.log(`Created ${chunks.length} chunks for document ${documentId}`);
 
-      // Progreso: 60% - Generar embeddings y guardar chunks
       await job.updateProgress(60);
       await this.notifyStatusUpdate({
         documentId,
@@ -133,7 +134,6 @@ export class ProcessingConsumer extends WorkerHost {
 
       await this.chunksService.processChunks(documentId, chunks);
 
-      // Progreso: 80% - Generar preguntas
       await job.updateProgress(80);
       currentStatus = DocumentStatus.GENERATING_QUESTIONS;
       await this.updateDocumentStatus(documentId, currentStatus);
