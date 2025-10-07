@@ -34,6 +34,7 @@
     "@supabase/supabase-js": "^2.52.0",
     "@types/pg": "^8.15.5",
     "aws-sdk": "^2.1692.0",
+    "expo-server-sdk": "^4.0.0",
     "multer": "^2.0.2",
     "openai": "^5.10.2",
     "passport": "^0.7.0",
