@@ -12,6 +12,7 @@ import { ChunkModule } from "src/chunks/chunk.module";
 import { QuestionModule } from "src/questions/question.module";
 import { ProcessingModule } from "src/processing/processing.module";
 import { DocumentProcessingGateway } from "./documents.gateway";
+import { NotificationsModule } from "src/notifications/notifications.module";
 
 @Module({
     providers: [DocumentsService, DocumentProcessingGateway],
@@ -32,6 +33,7 @@ import { DocumentProcessingGateway } from "./documents.gateway";
             }),
             inject: [ConfigService],
         }),
+        NotificationsModule
     ],
     exports: [DocumentsService, DocumentProcessingGateway],
 })

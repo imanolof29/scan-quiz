@@ -11,6 +11,7 @@ import { QuestionEntity } from './questions/entity/question.entity';
 import { DocumentChunkEntity } from './chunks/entity/document-chunk.entity';
 import { HealthModule } from './health/health.module';
 import { ProcessingModule } from './processing/processing.module';
+import { NotificationTokenEntity } from './notifications/entity/notification-token';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { ProcessingModule } from './processing/processing.module';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [DocumentEntity, QuestionEntity, DocumentChunkEntity],
+        entities: [DocumentEntity, QuestionEntity, DocumentChunkEntity, NotificationTokenEntity],
         synchronize: true,
       }),
       inject: [ConfigService],

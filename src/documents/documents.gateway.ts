@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { Supabase } from 'src/common/services/supabase';
 import { Step } from 'src/processing/types/step';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 interface AuthenticatedSocket extends Socket {
     userId?: string;
@@ -31,7 +32,8 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
     private userSockets = new Map<string, string>();
 
     constructor(
-        private readonly supabase: Supabase
+        private readonly supabase: Supabase,
+        private readonly notificationService: NotificationsService
     ) { }
 
     async handleConnection(client: AuthenticatedSocket) {
@@ -152,6 +154,7 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
         }
 
         this.logger.log(`Completion notification sent for document ${documentId}`);
+        await this.notificationService.sendNotificationToUser(userId, 'Document Processed', `Your document "${data.title}" has been processed successfully.`);
     }
 
     async notifyDocumentFailed(

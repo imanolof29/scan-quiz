@@ -16,33 +16,62 @@ export class NotificationsService {
     ) { }
 
     async registerToken(dto: RegisterTokenDto, userId: string) {
-        await this.notificationTokenRepository.create({
+        const newToken = await this.notificationTokenRepository.create({
             token: dto.token,
             platform: dto.platform,
             userId
-        })
+        });
+        await this.notificationTokenRepository.save(newToken);
     }
 
     async sendNotificationToUser(userId: string, title: string, body: string) {
         const tokens = await this.notificationTokenRepository.find({ where: { userId } });
-        const validTokens = tokens.filter((t) => Expo.isExpoPushToken(t));
+
+        if (tokens.length === 0) {
+            console.log("No tokens found for user:", userId);
+            return;
+        }
+
+        const validTokens = tokens
+            .map(t => t.token)
+            .filter((token) => Expo.isExpoPushToken(token));
+
+        if (validTokens.length === 0) {
+            console.log("No valid Expo tokens found");
+            return;
+        }
+
         const messages: ExpoPushMessage[] = validTokens.map((token) => ({
             to: token,
             sound: 'default',
             title,
             body,
+            data: { userId }
         }));
+
         const chunks = this.expo.chunkPushNotifications(messages);
         const tickets: ExpoPushTicket[] = [];
 
         for (const chunk of chunks) {
             try {
                 const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+                console.log("Tickets received:", ticketChunk);
                 tickets.push(...ticketChunk);
             } catch (error) {
-                console.log("ERROR SENDING NOTIFICATION: ", error);
+                console.error("ERROR SENDING NOTIFICATION: ", error);
             }
         }
+
+        for (const ticket of tickets) {
+            if (ticket.status === 'error') {
+                console.error("Error in ticket:", ticket.message);
+                if (ticket.details?.error) {
+                    console.error("Error details:", ticket.details.error);
+                }
+            }
+        }
+
+        return tickets;
     }
 
     async deleteUserTokens(userId: string) {
