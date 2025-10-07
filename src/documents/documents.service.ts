@@ -61,7 +61,6 @@ export class DocumentsService {
             throw new BadRequestException('User ID is required');
         }
 
-        // Validaciones adicionales
         if (file.mimetype !== 'application/pdf') {
             throw new BadRequestException('Only PDF files are allowed');
         }
@@ -71,7 +70,6 @@ export class DocumentsService {
         }
 
         try {
-            // 1. Crear documento en BD
             const document = this.documentsRepository.create({
                 title: file.originalname.replace(/\.pdf$/i, ''),
                 filename: file.originalname,
@@ -87,7 +85,6 @@ export class DocumentsService {
 
             this.logger.log(`Document created with ID: ${savedDocument.id}`);
 
-            // 2. Añadir a la cola de procesamiento
             await this.processingService.addDocumentToQueue(
                 savedDocument.id,
                 file,
@@ -129,7 +126,6 @@ export class DocumentsService {
                 throw new NotFoundException(`Document with ID ${documentId} not found or you don't have access to it`);
             }
 
-            // Verificar si el documento está procesado
             if (document.status !== DocumentStatus.COMPLETED) {
                 return {
                     documentId: document.id,
@@ -142,7 +138,6 @@ export class DocumentsService {
                 };
             }
 
-            // Verificar si tiene preguntas
             if (!document.questions || document.questions.length === 0) {
                 this.logger.warn(`Document ${documentId} has no questions`);
                 return {
@@ -170,7 +165,7 @@ export class DocumentsService {
                     pageReferences: q.pageReferences || [],
                 })),
                 totalQuestions: document.questions.length,
-                estimatedTime: Math.ceil(document.questions.length * 1.5), // 1.5 min por pregunta
+                estimatedTime: Math.ceil(document.questions.length * 1.5),
             };
         } catch (error) {
             this.logger.error(`Error fetching document questions for ${documentId}:`, error);
@@ -204,7 +199,6 @@ export class DocumentsService {
                 throw new NotFoundException(`Document with ID ${documentId} not found or you don't have access to it`);
             }
 
-            // Obtener información adicional de la cola si el documento está en procesamiento
             let queueInfo = null;
             if ([DocumentStatus.UPLOADING, DocumentStatus.PROCESSING, DocumentStatus.EXTRACTING,
             DocumentStatus.CHUNKING, DocumentStatus.GENERATING_QUESTIONS].includes(document.status)) {
@@ -256,7 +250,6 @@ export class DocumentsService {
                 throw new NotFoundException(`Document with ID ${documentId} not found or you don't have access to it`);
             }
 
-            // Eliminar el documento
             await this.documentsRepository.remove(document);
 
             this.logger.log(`Document ${documentId} deleted successfully`);

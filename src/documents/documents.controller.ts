@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Request, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { DocumentsService } from "./documents.service";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Auth } from "src/auth/decorator/auth.decorator";

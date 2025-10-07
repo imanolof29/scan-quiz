@@ -36,10 +36,7 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
 
     async handleConnection(client: AuthenticatedSocket) {
         try {
-            // Extraer token del handshake
             const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-
-            console.log("TOKEN RECIBIDO EN GATEWAY:", token);
 
             if (!token) {
                 this.logger.warn(`Client ${client.id} connected without token`);
@@ -47,7 +44,6 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
                 return;
             }
 
-            // Verificar el token
             const { data, error } = await this.supabase.getClient().auth.getUser(token);
 
             if (error) {
@@ -59,7 +55,6 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
 
             this.logger.log(`User ${client.userId} connected with socket ${client.id}`);
 
-            // Confirmar conexión al cliente
             client.emit('connection-established', {
                 message: 'Successfully connected to document processing notifications',
                 userId: client.userId,
@@ -120,10 +115,8 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
             timestamp: new Date().toISOString(),
         };
 
-        // Enviar a la room del documento
         this.server.to(roomName).emit('document-status-update', notification);
 
-        // También enviar directamente al usuario si está conectado
         const socketId = this.userSockets.get(userId);
         if (socketId) {
             this.server.to(socketId).emit('document-status-update', notification);
