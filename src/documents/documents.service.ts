@@ -2,8 +2,6 @@ import { BadRequestException, Injectable, NotFoundException, Logger } from "@nes
 import { InjectRepository } from "@nestjs/typeorm";
 import { DocumentEntity, DocumentStatus, Source } from "./entity/document.entity";
 import { Repository } from 'typeorm';
-import { QuestionsService } from "src/questions/question.service";
-import { ChunkService } from "src/chunks/chunk.service";
 import { DocumentDto } from "./dto/document.dto";
 import { ProcessingService } from "src/processing/processing.service";
 import { CreateManualDocumentDto } from "./dto/create-manual-document.dto";
@@ -269,21 +267,6 @@ export class DocumentsService {
             }
 
             throw new BadRequestException('Failed to delete document');
-        }
-    }
-
-    async updateDocumentStatus(documentId: string, status: DocumentStatus, errorMessage?: string) {
-        try {
-            const updateData: Partial<DocumentEntity> = {
-                status,
-            };
-
-            await this.documentsRepository.update(documentId, updateData);
-
-            this.logger.log(`Document ${documentId} status updated to ${status}`);
-        } catch (error) {
-            this.logger.error(`Error updating document status for ${documentId}:`, error);
-            throw error;
         }
     }
 
