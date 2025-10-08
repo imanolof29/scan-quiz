@@ -15,10 +15,10 @@ export class QuestionEntity {
     @Column()
     answerIndex: number
 
-    @Column()
+    @Column({ nullable: true })
     difficulty: string
 
-    @Column()
+    @Column({ nullable: true })
     questionType: string
 
     @Column('text', { array: true })

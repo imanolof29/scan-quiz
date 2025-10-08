@@ -29,7 +29,7 @@ export class DocumentEntity {
     @Column()
     title: string
 
-    @Column({ nullable: false })
+    @Column({ nullable: true })
     filename: string
 
     @Column({ nullable: true })

@@ -276,15 +276,24 @@ export class DocumentsService {
             status: DocumentStatus.COMPLETED,
             userId,
             source: Source.MANUAL
-        })
-        const questions = dto.questions.map(question => this.questionRepository.create({
-            question: question.question,
-            options: question.options,
-            answerIndex: question.correctOptionIndex,
-            document
-        }))
-        await this.documentsRepository.save(document);
+        });
+
+        const savedDocument = await this.documentsRepository.save(document);
+
+        const questions = dto.questions.map(question =>
+            this.questionRepository.create({
+                question: question.question,
+                options: question.options,
+                answerIndex: question.correctOptionIndex,
+                document: savedDocument,
+                sourceChunkIds: [],
+                pageReferences: []
+            })
+        );
+
         await this.questionRepository.save(questions);
+
+        return savedDocument;
     }
 
     private estimateCompletionTime(progress: number): string {
