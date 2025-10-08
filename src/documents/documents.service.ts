@@ -1,11 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DocumentEntity, DocumentStatus } from "./entity/document.entity";
+import { DocumentEntity, DocumentStatus, Source } from "./entity/document.entity";
 import { Repository } from 'typeorm';
 import { QuestionsService } from "src/questions/question.service";
 import { ChunkService } from "src/chunks/chunk.service";
 import { DocumentDto } from "./dto/document.dto";
 import { ProcessingService } from "src/processing/processing.service";
+import { CreateManualDocumentDto } from "./dto/create-manual-document.dto";
+import { QuestionEntity } from "src/questions/entity/question.entity";
 
 @Injectable()
 export class DocumentsService {
@@ -13,9 +15,9 @@ export class DocumentsService {
 
     constructor(
         @InjectRepository(DocumentEntity)
-        private documentsRepository: Repository<DocumentEntity>,
-        private chunksService: ChunkService,
-        private questionsService: QuestionsService,
+        private readonly documentsRepository: Repository<DocumentEntity>,
+        @InjectRepository(QuestionEntity)
+        private readonly questionRepository: Repository<QuestionEntity>,
         private readonly processingService: ProcessingService,
     ) { }
 
@@ -283,6 +285,23 @@ export class DocumentsService {
             this.logger.error(`Error updating document status for ${documentId}:`, error);
             throw error;
         }
+    }
+
+    async createManualDocument(userId: string, dto: CreateManualDocumentDto) {
+        const document = this.documentsRepository.create({
+            title: dto.title,
+            status: DocumentStatus.COMPLETED,
+            userId,
+            source: Source.MANUAL
+        })
+        const questions = dto.questions.map(question => this.questionRepository.create({
+            question: question.question,
+            options: question.options,
+            answerIndex: question.correctOptionIndex,
+            document
+        }))
+        await this.documentsRepository.save(document);
+        await this.questionRepository.save(questions);
     }
 
     private estimateCompletionTime(progress: number): string {

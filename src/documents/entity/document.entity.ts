@@ -12,6 +12,11 @@ export enum DocumentStatus {
     FAILED = 'failed'
 }
 
+export enum Source {
+    MANUAL = 'manual',
+    AI = 'ai'
+}
+
 
 @Entity('documents')
 export class DocumentEntity {
@@ -24,7 +29,7 @@ export class DocumentEntity {
     @Column()
     title: string
 
-    @Column()
+    @Column({ nullable: false })
     filename: string
 
     @Column({ nullable: true })
@@ -44,6 +49,9 @@ export class DocumentEntity {
     chunks: DocumentChunkEntity[]
 
     @OneToMany(() => QuestionEntity, question => question.document)
-    questions: QuestionEntity[]
+    questions: QuestionEntity[];
+
+    @Column({ type: 'enum', enum: Source, default: Source.AI })
+    source: Source;
 
 }

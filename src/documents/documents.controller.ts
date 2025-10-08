@@ -4,6 +4,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { Auth } from "src/auth/decorator/auth.decorator";
 import { CurrentUser } from "src/auth/decorator/user.decorator";
 import { ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
+import { CreateManualDocumentDto } from "./dto/create-manual-document.dto";
 
 @Controller('documents')
 @Auth()
@@ -86,4 +87,13 @@ export class DocumentsController {
     ) {
         return await this.documentsService.getDocumentQuestions(id, userId);
     }
+
+    @Post('manual')
+    async createManualDocument(
+        @CurrentUser('id') userId: string,
+        @Body() dto: CreateManualDocumentDto
+    ): Promise<void> {
+        await this.documentsService.createManualDocument(userId, dto);
+    }
+
 }

@@ -13,6 +13,7 @@ import { QuestionModule } from "src/questions/question.module";
 import { ProcessingModule } from "src/processing/processing.module";
 import { DocumentProcessingGateway } from "./documents.gateway";
 import { NotificationsModule } from "src/notifications/notifications.module";
+import { QuestionEntity } from "src/questions/entity/question.entity";
 
 @Module({
     providers: [DocumentsService, DocumentProcessingGateway],
@@ -23,7 +24,7 @@ import { NotificationsModule } from "src/notifications/notifications.module";
         OpenAIModule,
         ChunkModule,
         QuestionModule,
-        TypeOrmModule.forFeature([DocumentEntity]),
+        TypeOrmModule.forFeature([DocumentEntity, QuestionEntity]),
         forwardRef(() => ProcessingModule),
         JwtModule.registerAsync({
             imports: [ConfigModule],
