@@ -1,9 +1,9 @@
 import { DocumentEntity } from 'src/documents/entity/document.entity';
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index } from 'typeorm';
 
+// En DocumentChunkEntity
 @Entity('document_chunks')
 export class DocumentChunkEntity {
-
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
@@ -22,7 +22,8 @@ export class DocumentChunkEntity {
     @Column()
     tokenCount: number;
 
-    @ManyToOne(() => DocumentEntity, (document) => document.chunks)
+    @ManyToOne(() => DocumentEntity, (document) => document.chunks, {
+        onDelete: 'CASCADE'
+    })
     document: DocumentEntity;
-
 }

@@ -18,6 +18,7 @@ export enum Source {
 }
 
 
+// En DocumentEntity
 @Entity('documents')
 export class DocumentEntity {
     @PrimaryGeneratedColumn('uuid')
@@ -45,13 +46,18 @@ export class DocumentEntity {
     @CreateDateColumn()
     createdAt: Date
 
-    @OneToMany(() => DocumentChunkEntity, chunk => chunk.document)
+    @OneToMany(() => DocumentChunkEntity, chunk => chunk.document, {
+        cascade: true,
+        onDelete: 'CASCADE'
+    })
     chunks: DocumentChunkEntity[]
 
-    @OneToMany(() => QuestionEntity, question => question.document)
+    @OneToMany(() => QuestionEntity, question => question.document, {
+        cascade: true,
+        onDelete: 'CASCADE'
+    })
     questions: QuestionEntity[];
 
     @Column({ type: 'enum', enum: Source, default: Source.AI })
     source: Source;
-
 }

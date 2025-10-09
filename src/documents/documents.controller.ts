@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { DocumentsService } from "./documents.service";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Auth } from "src/auth/decorator/auth.decorator";
@@ -94,6 +94,19 @@ export class DocumentsController {
         @Body() dto: CreateManualDocumentDto
     ): Promise<void> {
         await this.documentsService.createManualDocument(userId, dto);
+    }
+
+    @Delete(':id')
+    @ApiOperation({
+        summary: 'Delete a document',
+        description: 'Deletes a specific document and all its associated data.'
+    })
+    async deleteDocument(
+        @Param('id') id: string,
+        @CurrentUser('id') userId: string
+    ) {
+        await this.documentsService.deleteDocument(id, userId);
+        return { success: true, message: 'Document deleted successfully' };
     }
 
 }

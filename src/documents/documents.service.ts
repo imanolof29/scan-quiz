@@ -6,6 +6,7 @@ import { DocumentDto } from "./dto/document.dto";
 import { ProcessingService } from "src/processing/processing.service";
 import { CreateManualDocumentDto } from "./dto/create-manual-document.dto";
 import { QuestionEntity } from "src/questions/entity/question.entity";
+import { DocumentChunkEntity } from "src/chunks/entity/document-chunk.entity";
 
 @Injectable()
 export class DocumentsService {
@@ -16,6 +17,10 @@ export class DocumentsService {
         private readonly documentsRepository: Repository<DocumentEntity>,
         @InjectRepository(QuestionEntity)
         private readonly questionRepository: Repository<QuestionEntity>,
+        @InjectRepository(DocumentChunkEntity)
+        private readonly chunksRepository: Repository<DocumentChunkEntity>,
+        @InjectRepository(QuestionEntity)
+        private readonly questionsRepository: Repository<QuestionEntity>,
         private readonly processingService: ProcessingService,
     ) { }
 
@@ -248,6 +253,14 @@ export class DocumentsService {
 
             if (!document) {
                 throw new NotFoundException(`Document with ID ${documentId} not found or you don't have access to it`);
+            }
+
+            if (document.questions && document.questions.length > 0) {
+                await this.questionsRepository.remove(document.questions);
+            }
+
+            if (document.chunks && document.chunks.length > 0) {
+                await this.chunksRepository.remove(document.chunks);
             }
 
             await this.documentsRepository.remove(document);
