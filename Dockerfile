@@ -1,5 +1,5 @@
 # Dockerfile para producción
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Instalar dependencias necesarias
 RUN apk add --no-cache libc6-compat
@@ -21,7 +21,7 @@ COPY . .
 RUN npm run build
 
 # Etapa de producción
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 RUN apk add --no-cache libc6-compat dumb-init
 
