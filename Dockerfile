@@ -10,14 +10,14 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig*.json ./
 
-# Instalar SOLO dependencias de producción
-RUN npm ci --only=production && \
+# Instalar TODAS las dependencias (incluidas devDependencies para compilar)
+RUN npm ci && \
     npm cache clean --force
 
 # Copiar el código fuente
 COPY . .
 
-# Compilar la aplicación (si usas TypeScript)
+# Compilar la aplicación
 RUN npm run build
 
 # Etapa de producción
@@ -31,10 +31,15 @@ WORKDIR /app
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copiar dependencias y build desde la etapa builder
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+# Copiar package files
+COPY package*.json ./
+
+# Instalar SOLO dependencias de producción
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Copiar build y cambiar permisos
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
 
 # Variables de entorno para producción
 ENV NODE_ENV=production
