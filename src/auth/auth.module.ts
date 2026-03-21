@@ -1,20 +1,14 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule, ConfigService } from "@nestjs/config";
-import { PassportModule } from "@nestjs/passport";
-import { JwtGuard } from "./guard/jwt.guard";
-import { SupabaseStrategy } from "./strategies/supabase.strategy";
+import { ConfigModule } from "@nestjs/config";
+import { ClerkGuard } from "./guard/clerk.guard";
+import { ClerkService } from "./clerk.service";
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
-import { CommonModule } from "src/common/common.module";
 
 @Module({
-    imports: [
-        PassportModule,
-        ConfigModule,
-        CommonModule
-    ],
-    providers: [JwtGuard, SupabaseStrategy, AuthService],
-    exports: [JwtGuard, SupabaseStrategy],
+    imports: [ConfigModule],
+    providers: [ClerkService, ClerkGuard, AuthService],
+    exports: [ClerkService, ClerkGuard],
     controllers: [AuthController]
 })
 export class AuthModule { }

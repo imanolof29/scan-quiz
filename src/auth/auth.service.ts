@@ -1,19 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import { Supabase } from "src/common/services/supabase";
+import { ClerkService } from "./clerk.service";
 
 @Injectable()
 export class AuthService {
-
-    constructor(
-        private readonly supabase: Supabase
-    ) { }
+    constructor(private readonly clerkService: ClerkService) { }
 
     async deleteAccount(userId: string): Promise<void> {
         try {
-            await this.supabase.getClient().auth.admin.deleteUser(userId);
+            await this.clerkService.deleteUser(userId);
         } catch (error) {
             console.error('Error deleting user:', error);
         }
     }
-
 }

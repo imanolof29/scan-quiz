@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
-import { Supabase } from 'src/common/services/supabase';
+import { ClerkService } from 'src/auth/clerk.service';
 import { Step } from 'src/processing/types/step';
 import { NotificationsService } from 'src/notifications/notifications.service';
 
@@ -32,7 +32,7 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
     private userSockets = new Map<string, string>();
 
     constructor(
-        private readonly supabase: Supabase,
+        private readonly clerkService: ClerkService,
         private readonly notificationService: NotificationsService
     ) { }
 
@@ -46,14 +46,11 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
                 return;
             }
 
-            const { data, error } = await this.supabase.getClient().auth.getUser(token);
+            const payload = await this.clerkService.verifyToken(token);
+            const userId = payload.sub;
 
-            if (error) {
-                throw error;
-            }
-
-            client.userId = data.user?.id;
-            this.userSockets.set(data.user.id ?? '', client.id);
+            client.userId = userId;
+            this.userSockets.set(userId, client.id);
 
             this.logger.log(`User ${client.userId} connected with socket ${client.id}`);
 
@@ -63,7 +60,7 @@ export class DocumentProcessingGateway implements OnGatewayConnection, OnGateway
             });
 
         } catch (error) {
-            console.log('Error authenticating WebSocket connection:', error);
+            this.logger.warn(`Error authenticating WebSocket connection: ${error.message}`);
             client.disconnect();
         }
     }

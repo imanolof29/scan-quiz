@@ -4,7 +4,6 @@ import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DocumentEntity, DocumentStatus } from 'src/documents/entity/document.entity';
-import { FileUploadService } from 'src/common/services/file-upload.service';
 import { PdfProcessorService } from 'src/common/services/pdf-processor.service';
 import { TextChunkerService } from 'src/common/services/text-chunker.service';
 import { ChunkService } from 'src/chunks/chunk.service';
@@ -28,7 +27,6 @@ export class ProcessingConsumer extends WorkerHost {
   constructor(
     @InjectRepository(DocumentEntity)
     private documentsRepository: Repository<DocumentEntity>,
-    private fileUploadService: FileUploadService,
     private pdfProcessorService: PdfProcessorService,
     private textChunkerService: TextChunkerService,
     private chunksService: ChunkService,
@@ -63,21 +61,6 @@ export class ProcessingConsumer extends WorkerHost {
         progress: 5,
         message: 'Starting document processing...'
       });
-
-      await job.updateProgress(10);
-      this.logger.log(`Uploading file to S3 for document ${documentId}`);
-
-      await this.notifyStatusUpdate({
-        documentId,
-        userId: document.userId,
-        status: DocumentStatus.UPLOADING,
-        progress: 10,
-        message: 'Uploading file to cloud storage...'
-      });
-
-      const s3Key = `documents/${documentId}.pdf`;
-      await this.fileUploadService.uploadToS3(buffer, s3Key);
-      await this.documentsRepository.update(documentId, { s3Key });
 
       await job.updateProgress(20);
       currentStatus = DocumentStatus.EXTRACTING;

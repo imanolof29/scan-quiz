@@ -1,7 +1,6 @@
 import { DocumentEntity } from 'src/documents/entity/document.entity';
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index } from 'typeorm';
 
-// En DocumentChunkEntity
 @Entity('document_chunks')
 export class DocumentChunkEntity {
     @PrimaryGeneratedColumn('uuid')

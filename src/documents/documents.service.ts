@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DocumentEntity, DocumentStatus, Source } from "./entity/document.entity";
+import { DocumentEntity, DocumentStatus } from "./entity/document.entity";
 import { Repository } from 'typeorm';
 import { DocumentDto } from "./dto/document.dto";
 import { ProcessingService } from "src/processing/processing.service";
@@ -50,61 +50,6 @@ export class DocumentsService {
             }));
         } catch (error) {
             this.logger.error('Error fetching documents:', error);
-            throw error;
-        }
-    }
-
-    async uploadAndProcess(
-        file: Express.Multer.File,
-        userId: string,
-    ) {
-        if (!file) {
-            throw new BadRequestException('No file provided');
-        }
-
-        if (!userId) {
-            throw new BadRequestException('User ID is required');
-        }
-
-        if (file.mimetype !== 'application/pdf') {
-            throw new BadRequestException('Only PDF files are allowed');
-        }
-
-        if (file.size > 50 * 1024 * 1024) { // 50MB
-            throw new BadRequestException('File too large. Maximum size allowed is 50MB');
-        }
-
-        try {
-            const document = this.documentsRepository.create({
-                title: file.originalname.replace(/\.pdf$/i, ''),
-                filename: file.originalname,
-                status: DocumentStatus.UPLOADING,
-                userId,
-            });
-
-            const savedDocument = await this.documentsRepository.save(document);
-
-            if (!savedDocument?.id) {
-                throw new Error('Failed to save document to database');
-            }
-
-            this.logger.log(`Document created with ID: ${savedDocument.id}`);
-
-            await this.processingService.addDocumentToQueue(
-                savedDocument.id,
-                file,
-                userId
-            );
-
-            return {
-                success: true,
-                documentId: savedDocument.id,
-                status: savedDocument.status,
-                message: 'Document uploaded successfully and added to processing queue'
-            };
-
-        } catch (error) {
-            this.logger.error('Error in uploadAndProcess:', error);
             throw error;
         }
     }
@@ -205,7 +150,7 @@ export class DocumentsService {
             }
 
             let queueInfo = null;
-            if ([DocumentStatus.UPLOADING, DocumentStatus.PROCESSING, DocumentStatus.EXTRACTING,
+            if ([DocumentStatus.PROCESSING, DocumentStatus.EXTRACTING,
             DocumentStatus.CHUNKING, DocumentStatus.GENERATING_QUESTIONS].includes(document.status)) {
 
                 const jobs = await this.processingService.getJobsByDocumentId(documentId);
@@ -288,7 +233,6 @@ export class DocumentsService {
             title: dto.title,
             status: DocumentStatus.COMPLETED,
             userId,
-            source: Source.MANUAL
         });
 
         const savedDocument = await this.documentsRepository.save(document);
